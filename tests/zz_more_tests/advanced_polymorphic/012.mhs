@@ -1,0 +1,5 @@
+main = letfun f x = 
+  (let m = letfun h m = let z = x; in x; in m, x+1) ;
+
+
+

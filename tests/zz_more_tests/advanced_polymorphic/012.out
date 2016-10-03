@@ -1,0 +1,3 @@
+main :: forall g. (Int -> (g -> Int) * Int) = (letfun f :: (Int -> (g -> Int) * Int) x = (let m :: forall e. (e -> Int) = (letfun h :: (e -> Int) m = let z :: Int = x;
+                                                                                                                                                      in x);
+                                                                                          in m, (+) x 1));

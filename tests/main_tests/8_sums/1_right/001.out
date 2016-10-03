@@ -1,0 +1,1 @@
+main :: forall a. (a + Bool * Bool) = Inr ((True, False));

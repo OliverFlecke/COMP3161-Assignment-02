@@ -1,0 +1,1 @@
+main :: forall g. (Int * (Bool + g) * Bool) = (1, (Inl True, False));

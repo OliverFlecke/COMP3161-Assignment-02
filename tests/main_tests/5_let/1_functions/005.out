@@ -1,0 +1,2 @@
+main :: Int = let f :: forall a. forall c. forall e. forall g. (a -> c -> e -> g -> Int -> Int) = (letfun f :: (a -> c -> e -> g -> Int -> Int) x = (letfun f :: (c -> e -> g -> Int -> Int) x = (letfun f :: (e -> g -> Int -> Int) x = (letfun f :: (g -> Int -> Int) x = (letfun f :: (Int -> Int) x = (*) 2 x)))));
+              in f 0 0 0 0 7;

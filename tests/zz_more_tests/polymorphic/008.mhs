@@ -1,0 +1,2 @@
+main = letfun f x = (if (fst x) then (fst x) else (snd x));
+

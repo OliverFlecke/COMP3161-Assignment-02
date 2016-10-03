@@ -1,0 +1,2 @@
+main :: Int = let v :: Int = (-) 1 2;
+              in v;

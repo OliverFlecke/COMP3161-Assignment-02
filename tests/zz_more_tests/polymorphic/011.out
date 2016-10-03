@@ -1,0 +1,3 @@
+main :: ((Bool * Int) -> Int) = (letfun f :: ((Bool * Int) -> Int) x = if fst x
+                                                                          then snd x
+                                                                          else f ((True, 10)));

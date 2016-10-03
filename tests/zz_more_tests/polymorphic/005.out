@@ -1,0 +1,5 @@
+main :: forall f. (f -> f) = if True
+                                then let g :: forall a. (a -> a) = (letfun f :: (a -> a) x = x);
+                                     in g
+                                else let g :: forall d. (d -> d) = (letfun f :: (d -> d) x = x);
+                                     in g;

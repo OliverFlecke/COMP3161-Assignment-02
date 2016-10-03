@@ -1,0 +1,1 @@
+main :: forall d. (() * d + ()) = ((), Inr ());

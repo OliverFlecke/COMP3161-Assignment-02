@@ -1,0 +1,3 @@
+main :: Int = if False
+                 then (/) 49 0
+                 else (/) 49 7;

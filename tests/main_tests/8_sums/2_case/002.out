@@ -1,0 +1,3 @@
+main :: forall p. (p + Bool * Int) = let x :: forall b. (b + Bool * Int) = (case Inl ((True, 7)) of Inl x -> Inr x;
+                                                                                                    Inr y -> Inl y;);
+                                     in x;

@@ -1,0 +1,1 @@
+main :: forall d. forall b. ((Bool + d) + b) = Inl (Inl True);

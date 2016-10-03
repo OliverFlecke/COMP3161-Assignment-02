@@ -1,0 +1,12 @@
+main 
+     =
+ let x = 8;
+
+ -- do they correctly get the environment for the partial eval?
+ in let 
+     f =
+        letfun f w =
+          letfun g y =
+               y + x + w + 1;
+
+ in f 3 2;

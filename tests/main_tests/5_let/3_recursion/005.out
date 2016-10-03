@@ -1,0 +1,4 @@
+main :: Int = let f :: (Int -> Int) = (letfun f :: (Int -> Int) x = if (==) x 1000
+                                                                       then x
+                                                                       else f ((+) x 1));
+              in f 10;

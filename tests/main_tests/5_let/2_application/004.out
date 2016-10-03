@@ -1,0 +1,3 @@
+main :: Int = let f :: (Int -> Int) = (letfun f :: (Int -> Int) x = (+) x 1);
+              in let g :: (Int -> Int) = f;
+                 in g 1;

@@ -1,0 +1,1 @@
+main :: (Int * Bool) = (1, True);

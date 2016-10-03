@@ -1,0 +1,1 @@
+main :: Int = (letfun f :: (Int -> Int) x = x) 1;

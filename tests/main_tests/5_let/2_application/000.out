@@ -1,0 +1,5 @@
+main :: Bool = let isTrue :: (Bool -> Bool) = (letfun isTrue :: (Bool -> Bool) x = if x
+                                                                                      then True
+                                                                                      else False);
+               in let f :: (Int -> Bool) = (letfun f :: (Int -> Bool) x = (==) x 10);
+                  in isTrue (f 11);

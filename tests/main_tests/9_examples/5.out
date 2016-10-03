@@ -1,0 +1,6 @@
+main :: (Int + Int) = let x :: Int = 1;
+                      in let y :: Int = 2;
+                         in let f :: forall a. (a -> a) = (letfun f :: (a -> a) z = z);
+                            in if f True
+                                  then Inl ((+) x y)
+                                  else Inr x;

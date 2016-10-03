@@ -1,0 +1,2 @@
+main :: Int = let f :: (Int -> Int) = (letfun f :: (Int -> Int) x = (+) x x);
+              in f 1;

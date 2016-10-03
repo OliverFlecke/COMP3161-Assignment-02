@@ -1,0 +1,1 @@
+main :: Bool = snd ((1, True));

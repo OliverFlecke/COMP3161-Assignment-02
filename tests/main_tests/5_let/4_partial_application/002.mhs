@@ -1,0 +1,7 @@
+main
+     =
+    let f =
+        letfun f x = 
+          letfun g y = y + y;
+
+    in f 2 3;

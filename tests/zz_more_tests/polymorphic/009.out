@@ -1,0 +1,2 @@
+main :: forall j. forall f. ((j * f + j) -> j) = (letfun f :: ((j * f + j) -> j) x = (case snd x of Inl y -> fst x;
+                                                                                                    Inr z -> z;));

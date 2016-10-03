@@ -1,0 +1,3 @@
+main :: ((Bool * Bool) -> Bool) = (letfun f :: ((Bool * Bool) -> Bool) x = if fst x
+                                                                              then fst x
+                                                                              else snd x);

@@ -1,0 +1,6 @@
+main :: forall k. (Int -> k -> Int) = let g :: forall j. (Int -> j -> Int) = (letfun f :: (Int -> j -> Int) x = if True
+                                                                                                                   then let h :: forall c. (c -> Int) = (letfun g :: (c -> Int) y = x);
+                                                                                                                        in h
+                                                                                                                   else let h :: forall f. (f -> Int) = (letfun g :: (f -> Int) y = (+) x 1);
+                                                                                                                        in h);
+                                      in g;

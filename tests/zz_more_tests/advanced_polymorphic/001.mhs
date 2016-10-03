@@ -1,0 +1,6 @@
+main = 
+  let g = letfun f x = 
+            if (x > 1) 
+              then (let h = letfun g y = x; in h) 
+              else (let h = letfun g y = x; in h) ; 
+  in g;

@@ -1,0 +1,9 @@
+main :: Bool = let lt0 :: (Int -> Bool) = (letfun lt0 :: (Int -> Bool) x = if (<) x 0
+                                                                              then True
+                                                                              else False);
+               in let gt1 :: (Int -> Bool) = (letfun gt1 :: (Int -> Bool) x = (>) x 1);
+                  in if lt0 ((- 10))
+                        then if gt1 0
+                                then False
+                                else True
+                        else False;

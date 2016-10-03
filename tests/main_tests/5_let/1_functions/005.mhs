@@ -1,0 +1,11 @@
+-- test environment
+
+main =
+    let f =
+        (letfun f x =   -- 6
+           letfun f x =       -- 5
+              letfun f x =            -- 4
+                 letfun f x =                -- 3
+                    letfun f x =                    -- 2
+                        (2*x)) ;
+    in f 0 0 0 0 7;

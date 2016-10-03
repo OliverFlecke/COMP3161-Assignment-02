@@ -1,0 +1,2 @@
+main :: (Int * Bool) = (case Inl ((1, True)) of Inl x -> x;
+                                                Inr y -> y;);
