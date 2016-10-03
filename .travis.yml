@@ -1,0 +1,10 @@
+language: haskell
+ghc:
+  - 8.0
+
+script: cabal configure && cabal build && ./run_tests.sh
+
+branches:
+  only:
+    - master
+    - stable
