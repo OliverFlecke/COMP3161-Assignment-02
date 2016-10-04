@@ -4,6 +4,7 @@ import MinHS.Syntax
 import MinHS.TCMonad
 
 import Text.PrettyPrint.ANSI.Leijen
+import Prelude hiding ((<$>))
 
 primop = dullyellow . string
 keyword = bold . string

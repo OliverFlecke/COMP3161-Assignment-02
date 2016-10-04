@@ -10,6 +10,7 @@ import Options.Applicative
 import Options.Applicative.Types
 
 import Text.PrettyPrint.ANSI.Leijen (Pretty (..),Doc, putDoc, plain)
+import Data.Monoid ((<>))
 
 type Action a b = a -> Either (IO ()) b
 
