@@ -90,7 +90,24 @@ unquantify' i s (Forall x t) = do x' <- fresh
                                               (substQType (x =:TypeVar (show i)) t)
 
 unify :: Type -> Type -> TC Subst
-unify = error "implement me"
+unify (TypeVar v1) (TypeVar v2) = 
+  if v1 == v2 
+    then return emptySubst
+    else return (v2 =: (TypeVar v1))
+unify (Base t1) (Base t2) = 
+  if t1 == t2 
+    then return emptySubst 
+    else error "No unifer"
+unify (Prod t11 t12) (Prod t21 t22) = do
+  s <- unify t11 t12
+  s' <- unify (substitute s t12) (substitute s t22)
+  return $ s <> s'
+unify (Sum t11 t12) (Sum t21 t22) = unify (Prod t11 t12) (Prod t21 t22)
+unify (Arrow t11 t12) (Arrow t21 t22) = unify (Prod t11 t12) (Prod t21 t22)
+-- unify (TypeVar v) 
+
+
+unify _ _ = error "No unifer found"
 
 generalise :: Gamma -> Type -> QType
 generalise g t = error "implement me"
@@ -126,6 +143,18 @@ inferExp g (App (App (Prim op) n1) n2) =
 inferExp g (Let [Bind n _ [] e] v) = do
   (e, t, s)   <- inferExp g e 
   return ((Let [Bind n (Just $ Ty t) [] e] v), t, s) 
+
+inferExp g (If b e1 e2) = do 
+  (b', bt, bs) <- inferExp g b
+  case bt of 
+    Base Bool -> do
+      (e1', e1t, e1s) <- inferExp g e1
+      (e2', e2t, e2s) <- inferExp g e2
+      t <- unify e1t e2t 
+      return ((If b' e1' e2'), e2t, t)
+    _         -> error "Type error" 
+
+
 
 inferExp g _ = error "Implement me!"
 -- -- Note: this is the only case you need to handle for case expressions
