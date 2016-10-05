@@ -112,8 +112,6 @@ inferExp g (Con var) =
   case constType var of 
     Just (Ty t)   -> return (Con var, t, emptySubst)
     Nothing       -> error "Could not find a type"
-    _             -> error "Type not yet implemented"
-
 inferExp g (App (Prim Neg) n) = 
   case primOpType Neg of 
     Ty (Base Int `Arrow` Base Int)  
@@ -124,6 +122,10 @@ inferExp g (App (App (Prim op) n1) n2) =
     Ty (Base Int `Arrow` (Base Int `Arrow` Base t))  
       -> return ((App (App (Prim op) n1) n2), Base t, emptySubst)
     _             -> error "Prim operator not yet supported"
+
+inferExp g (Let [Bind n _ [] e] v) = do
+  (e, t, s)   <- inferExp g e 
+  return ((Let [Bind n (Just $ Ty t) [] e] v), t, s) 
 
 inferExp g _ = error "Implement me!"
 -- -- Note: this is the only case you need to handle for case expressions
