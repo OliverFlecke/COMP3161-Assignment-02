@@ -95,11 +95,26 @@ unify = error "implement me"
 generalise :: Gamma -> Type -> QType
 generalise g t = error "implement me"
 
+
+
 inferProgram :: Gamma -> Program -> TC (Program, Type, Subst)
-inferProgram env bs = error "implement me! don't forget to run the result substitution on the"
-                            "entire expression using allTypes from Syntax.hs"
+
+inferProgram env [Bind name _ [] exp] = do 
+  (e, t, s) <- inferExp env exp 
+  return ([Bind name (Just $ Ty t) [] e], t, s)
+
+
+inferProgram env bs = error "implement me! don't forget to run the result substitution on the entire expression using allTypes from Syntax.hs"
 
 inferExp :: Gamma -> Exp -> TC (Exp, Type, Subst)
+inferExp g (Num n) = return (Num n, Base Int, emptySubst)
+inferExp g (Con var) = 
+  case constType var of 
+    Just (Ty t)   -> return (Con var, t, emptySubst)
+    Nothing       -> error "Could not find a type"
+    _             -> error "Type not yet implemented"
+
+
 inferExp g _ = error "Implement me!"
 -- -- Note: this is the only case you need to handle for case expressions
 -- inferExp g (Case e [Alt "Inl" [x] e1, Alt "Inr" [y] e2])
