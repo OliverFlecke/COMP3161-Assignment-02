@@ -114,6 +114,11 @@ inferExp g (Con var) =
     Nothing       -> error "Could not find a type"
     _             -> error "Type not yet implemented"
 
+inferExp g (App (App (Prim op) n1) n2) = 
+  case primOpType op of 
+    Ty (Base Int `Arrow` (Base Int `Arrow` Base t))  
+      -> return ((App (App (Prim op) n1) n2), Base t, emptySubst)
+    _             -> error "Prim operator not yet supported"
 
 inferExp g _ = error "Implement me!"
 -- -- Note: this is the only case you need to handle for case expressions
