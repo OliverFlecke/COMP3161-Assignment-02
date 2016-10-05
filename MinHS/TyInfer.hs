@@ -114,6 +114,11 @@ inferExp g (Con var) =
     Nothing       -> error "Could not find a type"
     _             -> error "Type not yet implemented"
 
+inferExp g (App (Prim Neg) n) = 
+  case primOpType Neg of 
+    Ty (Base Int `Arrow` Base Int)  
+      -> return ((App (Prim Neg) n), Base Int, emptySubst) 
+    _ -> error "Type not supported for negation"
 inferExp g (App (App (Prim op) n1) n2) = 
   case primOpType op of 
     Ty (Base Int `Arrow` (Base Int `Arrow` Base t))  
