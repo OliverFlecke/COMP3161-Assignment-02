@@ -147,7 +147,7 @@ inferExp g (App (App (Prim op) n1) n2) =
 inferExp g (Let [Bind n _ [] e] v) = do
   (e', t, s)    <- inferExp g e 
   (ve, vt, vs)  <- inferExp (E.add g (n, Ty t)) v 
-  return ((Let [Bind n (Just $ Ty t) [] e] v), vt, s) 
+  return ((Let [Bind n (Just $ Ty t) [] e'] ve), vt, s <> vs) 
 
 inferExp g (If b e1 e2) = do 
   (b', bt, bs) <- inferExp g b
