@@ -104,31 +104,35 @@ unify (Prod t11 t12) (Prod t21 t22) = do
   return $ s <> s'
 unify (Sum t11 t12) (Sum t21 t22) = unify (Prod t11 t12) (Prod t21 t22)
 unify (Arrow t11 t12) (Arrow t21 t22) = unify (Prod t11 t12) (Prod t21 t22)
--- unify (TypeVar v) 
-
-
 unify _ _ = error "No unifer found"
 
 generalise :: Gamma -> Type -> QType
 generalise g t = error "implement me"
 
+-- Helper function 
+bindName (Bind n _ _ _) = n
 
 
+-- Infer program
 inferProgram :: Gamma -> Program -> TC (Program, Type, Subst)
-
 inferProgram env [Bind name _ [] exp] = do 
   (e, t, s) <- inferExp env exp 
   return ([Bind name (Just $ Ty t) [] e], t, s)
-
-
 inferProgram env bs = error "implement me! don't forget to run the result substitution on the entire expression using allTypes from Syntax.hs"
 
+
+-- Infer expression
 inferExp :: Gamma -> Exp -> TC (Exp, Type, Subst)
 inferExp g (Num n) = return (Num n, Base Int, emptySubst)
 inferExp g (Con var) = 
   case constType var of 
     Just (Ty t)   -> return (Con var, t, emptySubst)
     Nothing       -> error "Could not find a type"
+
+inferExp g (Var v) = 
+  case E.lookup g v of 
+    Just (Ty t)  -> return (Var v, t, emptySubst)
+    Nothing -> error "Varible not in gamma" 
 inferExp g (App (Prim Neg) n) = 
   case primOpType Neg of 
     Ty (Base Int `Arrow` Base Int)  
@@ -141,8 +145,9 @@ inferExp g (App (App (Prim op) n1) n2) =
     _             -> error "Prim operator not yet supported"
 
 inferExp g (Let [Bind n _ [] e] v) = do
-  (e, t, s)   <- inferExp g e 
-  return ((Let [Bind n (Just $ Ty t) [] e] v), t, s) 
+  (e', t, s)    <- inferExp g e 
+  (ve, vt, vs)  <- inferExp (E.add g (n, Ty t)) v 
+  return ((Let [Bind n (Just $ Ty t) [] e] v), vt, s) 
 
 inferExp g (If b e1 e2) = do 
   (b', bt, bs) <- inferExp g b
@@ -152,11 +157,11 @@ inferExp g (If b e1 e2) = do
       (e2', e2t, e2s) <- inferExp g e2
       t <- unify e1t e2t 
       return ((If b' e1' e2'), e2t, t)
-    _         -> error "Type error" 
+    t         -> error "Type should have been a bool" --return TypeMismatch t (Base Bool) 
 
 
 
-inferExp g _ = error "Implement me!"
+inferExp g _ = error "inferExp: Implement me!"
 -- -- Note: this is the only case you need to handle for case expressions
 -- inferExp g (Case e [Alt "Inl" [x] e1, Alt "Inr" [y] e2])
 -- inferExp g (Case e _) = typeError MalformedAlternatives
