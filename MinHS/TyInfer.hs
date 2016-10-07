@@ -97,20 +97,27 @@ unify (TypeVar v1) (TypeVar v2) =
 unify (Base t1) (Base t2) = 
   if t1 == t2 
     then return emptySubst 
-    else error "No unifer"
+    else typeError $ TypeMismatch (Base t1) (Base t2)
+      -- error $ "No unifer for the base types " <> (show t1) <> " and " <> (show t2)
 unify (Prod t11 t12) (Prod t21 t22) = do
-  s <- unify t11 t12
-  s' <- unify (substitute s t12) (substitute s t22)
+  s     <- unify t11 t12
+  s'    <- unify (substitute s t12) (substitute s t22)
   return $ s <> s'
 unify (Sum t11 t12) (Sum t21 t22) = unify (Prod t11 t12) (Prod t21 t22)
-unify (Arrow t11 t12) (Arrow t21 t22) = unify (Prod t11 t12) (Prod t21 t22)
-unify _ _ = error "No unifer found"
+unify (Arrow t11 t12) (Arrow t21 t22) = do
+  s     <- unify t11 t21 
+  s'    <- unify t12 t22
+  return $ s <> s'
+-- Still missing a check to see if v is in t !!!
+unify (TypeVar v) t = return $ v =: t
+unify t (TypeVar v) = unify (TypeVar v) t
+unify t1 t2 = typeError $ TypeMismatch t1 t2
+ -- error $ "No unifer found between " <> (show t1) <> " and " <> (show t2)
 
 generalise :: Gamma -> Type -> QType
 generalise g t = error "implement me"
 
 -- Helper function 
-bindName (Bind n _ _ _) = n
 
 
 -- Infer program
@@ -127,37 +134,55 @@ inferExp g (Num n) = return (Num n, Base Int, emptySubst)
 inferExp g (Con var) = 
   case constType var of 
     Just (Ty t)   -> return (Con var, t, emptySubst)
-    Nothing       -> error "Could not find a type"
+    Nothing       -> typeError $ NoSuchVariable var 
 
 inferExp g (Var v) = 
   case E.lookup g v of 
-    Just (Ty t)  -> return (Var v, t, emptySubst)
-    Nothing -> error "Varible not in gamma" 
+    Just (Ty t)   -> return (Var v, t, emptySubst)
+    Nothing       -> error "Varible not in gamma" 
 inferExp g (App (Prim Neg) n) = 
   case primOpType Neg of 
     Ty (Base Int `Arrow` Base Int)  
-      -> return ((App (Prim Neg) n), Base Int, emptySubst) 
-    _ -> error "Type not supported for negation"
+          -> return ((App (Prim Neg) n), Base Int, emptySubst) 
+    Ty t  -> typeError $ TypeMismatch (Base Int) t
 inferExp g (App (App (Prim op) n1) n2) = 
   case primOpType op of 
     Ty (Base Int `Arrow` (Base Int `Arrow` Base t))  
-      -> return ((App (App (Prim op) n1) n2), Base t, emptySubst)
-    _             -> error "Prim operator not yet supported"
+          -> return ((App (App (Prim op) n1) n2), Base t, emptySubst)
+    _     -> error "Prim operator not yet supported"
 
 inferExp g (Let [Bind n _ [] e] v) = do
   (e', t, s)    <- inferExp g e 
-  (ve, vt, vs)  <- inferExp (E.add g (n, Ty t)) v 
+  (ve, vt, vs)  <- inferExp (substGamma s (E.add g (n, Ty t))) v 
   return ((Let [Bind n (Just $ Ty t) [] e'] ve), vt, s <> vs) 
 
+-- Not done!
+inferExp g (Letfun (Bind n _ v e)) = do
+  x             <- fresh
+  f             <- fresh
+  (e', t, s)    <- inferExp (g `E.addAll` [("x", Ty x), ("f", Ty f)]) e 
+  -- error $ "Letfun expression type: " <> (show t) <> " f: " <> (show f) 
+  un            <- unify f (Arrow x t) 
+  return (Letfun (Bind n (Just $ Ty (Arrow x t)) v e'), Arrow x t, s <> un)
+
+inferExp g (App e1 e2) = do 
+  a                 <- fresh -- Don't know why I can't just put this instead of a at the end (gives wrong type)
+  (e1', t1, s)      <- inferExp g e1
+  (e2', t2, s')     <- inferExp (substGamma s g) e2
+  -- error $ "Apply infering between " <> (show t1) <> " and " <> (show $ Arrow t2 a) 
+  s''               <- unify (substitute s' t1) (Arrow t2 a)
+  return (App e1' e2', a, s <> s' <> s'')
+
 inferExp g (If b e1 e2) = do 
-  (b', bt, bs) <- inferExp g b
-  case bt of 
-    Base Bool -> do
-      (e1', e1t, e1s) <- inferExp g e1
-      (e2', e2t, e2s) <- inferExp g e2
-      t <- unify e1t e2t 
-      return ((If b' e1' e2'), e2t, t)
-    t         -> error "Type should have been a bool" --return TypeMismatch t (Base Bool) 
+  (b', bt, bs)  <- inferExp g b
+  u             <- unify bt (Base Bool)
+  case substitute (u <> bs) bt of 
+    Base Bool   -> do
+      (e1', t1, s1)   <- inferExp (substGamma (u <> bs) g) e1
+      (e2', t2, s2)   <- inferExp (substGamma (u <> bs <> s1) g) e2
+      t               <- unify (substitute (s2) t1) t2 
+      return ((If b' e1' e2'), t2, t <> s1 <> s2)
+    t           -> typeError $ TypeMismatch (Base Bool) bt
 
 
 
