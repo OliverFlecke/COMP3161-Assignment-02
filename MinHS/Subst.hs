@@ -10,7 +10,7 @@ import MinHS.Syntax
 import Data.Monoid hiding (Sum)
 import MinHS.Env hiding (lookup)
 
-newtype Subst = Subst [(Id, Type)]
+newtype Subst = Subst [(Id, Type)] deriving (Show)
 
 
 instance Monoid Subst where
