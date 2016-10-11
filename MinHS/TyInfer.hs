@@ -131,7 +131,7 @@ generalise g t = foldl (\t' -> \x -> Forall x t') (Ty t) $ filter (\x -> elem x 
 inferProgram :: Gamma -> Program -> TC (Program, Type, Subst)
 inferProgram env [Bind name _ [] exp] = do 
   (e, t, s) <- inferExp env exp 
-  return ([Bind name (Just $ Ty t) [] e], t, s)
+  return ([Bind "main" (Just $ Ty t) [] e], substitute s t, s)
 inferProgram env bs = error "implement me! don't forget to run the result substitution on the entire expression using allTypes from Syntax.hs"
 
 
@@ -164,24 +164,29 @@ inferExp g (App (App (Prim op) e1) e2) =
         (Var x, Var y) | x == y -> 
           case E.lookup g x of 
             Just (Ty (TypeVar a)) -> return (e, Base t, a =: (Base Int))
+            Just (Ty (Base a))    -> return (e, Base t, x =: (Base a))
             Nothing               -> return (e, Base t, x =: (Base Int))
         (Var x, Var y)  -> 
           case (E.lookup g x, E.lookup g y) of 
             (Just (Ty (TypeVar a)), Just (Ty (TypeVar b)))  -> 
               return (e, Base t, a =: (Base Int) <> b =: (Base Int))
-            (Just (Ty (TypeVar a)), Nothing)                -> 
+            (Just (Ty (TypeVar a)), _)                      -> 
               return (e, Base t, a =: (Base Int) <> y =: (Base Int)) 
-            (Nothing, Just (Ty (TypeVar b)))                ->
+            (_, Just (Ty (TypeVar b)))                      ->
               return (e, Base t, x =: (Base Int) <> b =: (Base Int))
+            (Just (Ty (Base a)), Just (Ty (Base b)))        -> 
+              return (e, Base t, x =: (Base a) <> y =: (Base b))
             (Nothing, Nothing)                              -> 
               return (e, Base t, x =: (Base Int) <> y =: (Base Int)) 
         (Var x, _)      -> 
           case E.lookup g x of 
             Just (Ty (TypeVar a)) -> return (e, Base t, a =: (Base Int))
+            Just (Ty (Base a))    -> return (e, Base t, x =: (Base a))
             Nothing               -> return (e, Base t, x =: (Base Int))
         (_, Var x)      -> 
           case E.lookup g x of 
             Just (Ty (TypeVar a)) -> return (e, Base t, a =: (Base Int))
+            Just (Ty (Base a))    -> return (e, Base t, x =: (Base a))
             Nothing               -> return (e, Base t, x =: (Base Int))
         (_, _)          -> return (e, Base t, emptySubst)
     _   -> error "Prim operator not yet supported"
