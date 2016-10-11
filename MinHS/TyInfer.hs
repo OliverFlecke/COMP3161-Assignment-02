@@ -131,7 +131,7 @@ generalise g t = foldl (\t' -> \x -> Forall x t') (Ty t) $ filter (\x -> elem x 
 inferProgram :: Gamma -> Program -> TC (Program, Type, Subst)
 inferProgram env [Bind name _ [] exp] = do 
   (e, t, s) <- inferExp env exp 
-  return ([Bind "main" (Just $ Ty t) [] e], substitute s t, s)
+  return ([Bind "main" (Just $ Ty (substitute s t)) [] e], substitute s t, s)
 inferProgram env bs = error "implement me! don't forget to run the result substitution on the entire expression using allTypes from Syntax.hs"
 
 
@@ -146,6 +146,7 @@ inferExp g (Con var) =
 inferExp g (Var v) = 
   case E.lookup g v of 
     Just (Ty t)   -> return (Var v, t, emptySubst)
+    Just t        -> error (show t)
     Nothing       -> error "Varible not in gamma" 
 inferExp g (App (Prim Neg) n) = 
   case primOpType Neg of 
