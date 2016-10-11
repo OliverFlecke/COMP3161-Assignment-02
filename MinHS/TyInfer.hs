@@ -114,8 +114,15 @@ unify t (TypeVar v) = unify (TypeVar v) t
 unify t1 t2 = typeError $ TypeMismatch t1 t2
  -- error $ "No unifer found between " <> (show t1) <> " and " <> (show t2)
 
+
 generalise :: Gamma -> Type -> QType
-generalise g t = error "implement me"
+generalise g t = foldl (\t' -> \x -> Forall x t') (Ty t) $ filter (\x -> elem x (tvGamma g)) (tv t)
+-- Not enterly sure they do they same, so saved for safety 
+-- generalise g t = generaliseHelper (filter (\x -> elem x (tvGamma g)) (tv t)) t
+-- generaliseHelper :: [Id] -> Type -> QType
+-- generaliseHelper (x:xs) t = Forall x $ generaliseHelper xs t
+-- generaliseHelper [] t = Ty t
+
 
 -- Helper function 
 
@@ -145,25 +152,77 @@ inferExp g (App (Prim Neg) n) =
     Ty (Base Int `Arrow` Base Int)  
           -> return ((App (Prim Neg) n), Base Int, emptySubst) 
     Ty t  -> typeError $ TypeMismatch (Base Int) t
-inferExp g (App (App (Prim op) n1) n2) = 
+-- inferExp g (App (App (Prim op) (Var v1)) (Var v2)) = error "We are here"
+-- inferExp g (App (App (Prim op) (Var v1)) (Var v2)) = 
+--   case primOpType op of 
+--     Ty t  -> return (App (App (Prim op) (Var v1) (Var v2)), t, emptySubst)
+--     _     -> error "Operator not supported"
+inferExp g (App (App (Prim op) e1) e2) = 
   case primOpType op of 
-    Ty (Base Int `Arrow` (Base Int `Arrow` Base t))  
-          -> return ((App (App (Prim op) n1) n2), Base t, emptySubst)
-    _     -> error "Prim operator not yet supported"
+    Ty (Base Int `Arrow` (Base Int `Arrow` Base t)) -> 
+      case (e1, e2) of 
+        (Var x, Var y) | x == y -> 
+          case E.lookup g x of 
+            Just (Ty (TypeVar a)) -> return (e, Base t, a =: (Base Int))
+            Nothing               -> return (e, Base t, x =: (Base Int))
+        (Var x, Var y)  -> 
+          case (E.lookup g x, E.lookup g y) of 
+            (Just (Ty (TypeVar a)), Just (Ty (TypeVar b)))  -> 
+              return (e, Base t, a =: (Base Int) <> b =: (Base Int))
+            (Just (Ty (TypeVar a)), Nothing)                -> 
+              return (e, Base t, a =: (Base Int) <> y =: (Base Int)) 
+            (Nothing, Just (Ty (TypeVar b)))                ->
+              return (e, Base t, x =: (Base Int) <> b =: (Base Int))
+            (Nothing, Nothing)                              -> 
+              return (e, Base t, x =: (Base Int) <> y =: (Base Int)) 
+        (Var x, _)      -> 
+          case E.lookup g x of 
+            Just (Ty (TypeVar a)) -> return (e, Base t, a =: (Base Int))
+            Nothing               -> return (e, Base t, x =: (Base Int))
+        (_, Var x)      -> 
+          case E.lookup g x of 
+            Just (Ty (TypeVar a)) -> return (e, Base t, a =: (Base Int))
+            Nothing               -> return (e, Base t, x =: (Base Int))
+        (_, _)          -> return (e, Base t, emptySubst)
+    _   -> error "Prim operator not yet supported"
+  where 
+    e = App (App (Prim op) e1) e2
+        -- case (e1, e2) of 
+        --       (Var x, Var y) | x == y -> 
+        --         return (App (App (Prim op) e1) e2, Base Int `Arrow` Base t, emptySubst)
+        --       (Var _, Var _)    -> 
+        --         return (App (App (Prim op) e1) e2, Base Int `Arrow` (Base Int `Arrow` Base t), emptySubst)
+        --       (Var _, _)        -> 
+        --         return (App (App (Prim op) e1) e2, Base Int `Arrow` Base t, emptySubst)
+        --       (_, Var _)        -> 
+        --         return (App (App (Prim op) e1) e2, Base Int `Arrow` Base t, emptySubst)
+        --       (_, _)            -> 
 
-inferExp g (Let [Bind n _ [] e] v) = do
-  (e', t, s)    <- inferExp g e 
-  (ve, vt, vs)  <- inferExp (substGamma s (E.add g (n, Ty t))) v 
-  return ((Let [Bind n (Just $ Ty t) [] e'] ve), vt, s <> vs) 
+inferExp g (Let [Bind n _ [] e1] e2) = do
+  (e1', t1, s1)  <- inferExp g e1 
+  (e2', t2, s2)  <- inferExp (substGamma s1 (E.add g (n, generalise (substGamma s1 g) t1))) e2 
+  return ((Let [Bind n (Just $ Ty t1) [] e1'] e2'), t2, s1 <> s2) 
 
--- Not done!
-inferExp g (Letfun (Bind n _ v e)) = do
+-- Should be working
+inferExp g (Letfun (Bind n _ (v:vs) e)) = do
   x             <- fresh
   f             <- fresh
-  (e', t, s)    <- inferExp (g `E.addAll` [("x", Ty x), ("f", Ty f)]) e 
-  -- error $ "Letfun expression type: " <> (show t) <> " f: " <> (show f) 
-  un            <- unify f (Arrow x t) 
-  return (Letfun (Bind n (Just $ Ty (Arrow x t)) v e'), Arrow x t, s <> un)
+  (e', t, s)    <- inferExp (g `E.addAll` [(v, Ty x), (n, Ty f)]) e 
+  un            <- unify (substitute s f) (Arrow (substitute s x) t)
+  return (Letfun (Bind n (Just $ Ty (substitute un f)) (v:vs) e'), 
+      substitute un f, s <> un)
+  -- error $ "Letfun expression type: " 
+  --   <> "\nName x: " <> (show v) <> " Type: " <> (show (Arrow x t)) 
+  --   <> "\nName f: " <> (show n) <> " Type: " <> (show f)
+  --   <> "\nOutput type: " <> (show (substitute (un <> s) f)) 
+  --   <> "\n\nEnvironment " <> (show (g `E.addAll` [(v, Ty x), (n, Ty f)]))
+  --   <> "\noutput " <> (show (s))
+  --   <> "\nun " <> (show un) 
+  --   <> "\nX substituted " <> (show (substitute s x))
+
+
+
+
 
 inferExp g (App e1 e2) = do 
   a                 <- fresh -- Don't know why I can't just put this instead of a at the end (gives wrong type)
