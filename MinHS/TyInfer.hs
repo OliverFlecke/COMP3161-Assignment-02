@@ -146,7 +146,7 @@ inferExp g (Con var) =
 inferExp g (Var v) = 
   case E.lookup g v of 
     Just (Ty t)   -> return (Var v, t, emptySubst)
-    Just t        -> error (show t)
+    Just (Forall id t) -> error "InferExp for variables - What to do with foralls?"
     Nothing       -> error "Varible not in gamma" 
 inferExp g (App (Prim Neg) n) = 
   case primOpType Neg of 
@@ -165,29 +165,26 @@ inferExp g (App (App (Prim op) e1) e2) =
         (Var x, Var y) | x == y -> 
           case E.lookup g x of 
             Just (Ty (TypeVar a)) -> return (e, Base t, a =: (Base Int))
-            Just (Ty (Base a))    -> return (e, Base t, x =: (Base a))
+            Just (Ty alpha)       -> return (e, Base t, x =: alpha)
             Nothing               -> return (e, Base t, x =: (Base Int))
         (Var x, Var y)  -> 
           case (E.lookup g x, E.lookup g y) of 
-            (Just (Ty (TypeVar a)), Just (Ty (TypeVar b)))  -> 
-              return (e, Base t, a =: (Base Int) <> b =: (Base Int))
-            (Just (Ty (TypeVar a)), _)                      -> 
-              return (e, Base t, a =: (Base Int) <> y =: (Base Int)) 
-            (_, Just (Ty (TypeVar b)))                      ->
-              return (e, Base t, x =: (Base Int) <> b =: (Base Int))
-            (Just (Ty (Base a)), Just (Ty (Base b)))        -> 
-              return (e, Base t, x =: (Base a) <> y =: (Base b))
-            (Nothing, Nothing)                              -> 
-              return (e, Base t, x =: (Base Int) <> y =: (Base Int)) 
+            (Just (Ty (TypeVar a)), Just (Ty (TypeVar b)))  -> return (e, Base t, a =: (Base Int) <> b =: (Base Int))
+            (Just (Ty (TypeVar a)), Nothing)  -> return (e, Base t, a =: (Base Int) <> y =: (Base Int)) 
+            (Nothing, Just (Ty (TypeVar b)))  -> return (e, Base t, x =: (Base Int) <> b =: (Base Int))
+            (Just (Ty (TypeVar a)), Just (Ty alpha)) -> return (e, Base t, a =: (Base Int) <> y =: alpha)
+            (Just (Ty alpha), Just (Ty (TypeVar a))) -> return (e, Base t, x =: alpha <> a =: (Base Int))
+            (Just (Ty t1), Just (Ty t2))      -> return (e, Base t, x =: t1 <> y =: t2)
+            (_, _) -> return (e, Base t, x =: (Base Int) <> y =: (Base Int)) 
         (Var x, _)      -> 
           case E.lookup g x of 
             Just (Ty (TypeVar a)) -> return (e, Base t, a =: (Base Int))
-            Just (Ty (Base a))    -> return (e, Base t, x =: (Base a))
+            Just (Ty alpha)       -> return (e, Base t, x =: alpha)
             Nothing               -> return (e, Base t, x =: (Base Int))
         (_, Var x)      -> 
           case E.lookup g x of 
             Just (Ty (TypeVar a)) -> return (e, Base t, a =: (Base Int))
-            Just (Ty (Base a))    -> return (e, Base t, x =: (Base a))
+            Just (Ty alpha)       -> return (e, Base t, x =: alpha)
             Nothing               -> return (e, Base t, x =: (Base Int))
         (_, _)          -> return (e, Base t, emptySubst)
     _   -> error "Prim operator not yet supported"
@@ -246,7 +243,7 @@ inferExp g (If b e1 e2) = do
       (e1', t1, s1)   <- inferExp (substGamma (u <> bs) g) e1
       (e2', t2, s2)   <- inferExp (substGamma (u <> bs <> s1) g) e2
       t               <- unify (substitute (s2) t1) t2 
-      return ((If b' e1' e2'), t2, t <> s1 <> s2)
+      return ((If b' e1' e2'), t2, t <> s1 <> s2 <> u <> bs)
     t           -> typeError $ TypeMismatch (Base Bool) bt
 
 
