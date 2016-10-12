@@ -98,7 +98,6 @@ unify (Base t1) (Base t2) =
   if t1 == t2 
     then return emptySubst 
     else typeError $ TypeMismatch (Base t1) (Base t2)
-      -- error $ "No unifer for the base types " <> (show t1) <> " and " <> (show t2)
 unify (Prod t11 t12) (Prod t21 t22) = do
   s     <- unify t11 t12
   s'    <- unify (substitute s t12) (substitute s t22)
@@ -108,23 +107,23 @@ unify (Arrow t11 t12) (Arrow t21 t22) = do
   s     <- unify t11 t21 
   s'    <- unify t12 t22
   return $ s <> s'
--- Still missing a check to see if v is in t !!!
-unify (TypeVar v) t = return $ v =: t
+unify (TypeVar v) t = 
+  if elem v (tv t)  -- Should check if v is in the type t
+    then typeError $ OccursCheckFailed v t
+    else return $ v =: t
 unify t (TypeVar v) = unify (TypeVar v) t
 unify t1 t2 = typeError $ TypeMismatch t1 t2
  -- error $ "No unifer found between " <> (show t1) <> " and " <> (show t2)
 
 
 generalise :: Gamma -> Type -> QType
-generalise g t = foldl (\t' -> \x -> Forall x t') (Ty t) $ filter (\x -> elem x (tvGamma g)) (tv t)
+generalise g t = --error $ (show t) <> (show (filter (\x -> not $ elem x (tvGamma g)) (tv t)))
+  foldl (\t' -> \x -> Forall x t') (Ty t) $ filter (\x -> not $ elem x (tvGamma g)) (tv t)
 -- Not enterly sure they do they same, so saved for safety 
 -- generalise g t = generaliseHelper (filter (\x -> elem x (tvGamma g)) (tv t)) t
 -- generaliseHelper :: [Id] -> Type -> QType
 -- generaliseHelper (x:xs) t = Forall x $ generaliseHelper xs t
 -- generaliseHelper [] t = Ty t
-
-
--- Helper function 
 
 
 -- Infer program
@@ -138,26 +137,29 @@ inferProgram env bs = error "implement me! don't forget to run the result substi
 -- Infer expression
 inferExp :: Gamma -> Exp -> TC (Exp, Type, Subst)
 inferExp g (Num n) = return (Num n, Base Int, emptySubst)
-inferExp g (Con var) = 
+inferExp g (Con var) = do
   case constType var of 
-    Just (Ty t)   -> return (Con var, t, emptySubst)
+    Just (Ty t)   -> return (Con var, t, var =: t)
     Nothing       -> typeError $ NoSuchVariable var 
 
-inferExp g (Var v) = 
+inferExp g (Var v) = do
   case E.lookup g v of 
-    Just (Ty t)   -> return (Var v, t, emptySubst)
-    Just (Forall id t) -> error "InferExp for variables - What to do with foralls?"
-    Nothing       -> error "Varible not in gamma" 
+    Just (Ty t)         -> return (Var v, t, v =: t)
+    Just (Forall id t)  -> error "InferExp for variables - What to do with foralls?"
+    Nothing             -> error "Varible not in gamma" 
 inferExp g (App (Prim Neg) n) = 
   case primOpType Neg of 
-    Ty (Base Int `Arrow` Base Int)  
-          -> return ((App (Prim Neg) n), Base Int, emptySubst) 
+    Ty (Base Int `Arrow` Base Int)  ->
+      case n of 
+        Var v   ->
+          case E.lookup g v of 
+            Just (Ty (TypeVar a)) -> return (e, Base Int, a =: (Base Int))
+            Just (Ty alpha)       -> return (e, Base Int, v =: alpha)
+            Nothing               -> return (e, Base Int, emptySubst) 
+        _  -> return (e, Base Int, emptySubst)
     Ty t  -> typeError $ TypeMismatch (Base Int) t
--- inferExp g (App (App (Prim op) (Var v1)) (Var v2)) = error "We are here"
--- inferExp g (App (App (Prim op) (Var v1)) (Var v2)) = 
---   case primOpType op of 
---     Ty t  -> return (App (App (Prim op) (Var v1) (Var v2)), t, emptySubst)
---     _     -> error "Operator not supported"
+  where 
+    e = App (Prim Neg) n
 inferExp g (App (App (Prim op) e1) e2) = 
   case primOpType op of 
     Ty (Base Int `Arrow` (Base Int `Arrow` Base t)) -> 
@@ -170,12 +172,12 @@ inferExp g (App (App (Prim op) e1) e2) =
         (Var x, Var y)  -> 
           case (E.lookup g x, E.lookup g y) of 
             (Just (Ty (TypeVar a)), Just (Ty (TypeVar b)))  -> return (e, Base t, a =: (Base Int) <> b =: (Base Int))
-            (Just (Ty (TypeVar a)), Nothing)  -> return (e, Base t, a =: (Base Int) <> y =: (Base Int)) 
-            (Nothing, Just (Ty (TypeVar b)))  -> return (e, Base t, x =: (Base Int) <> b =: (Base Int))
-            (Just (Ty (TypeVar a)), Just (Ty alpha)) -> return (e, Base t, a =: (Base Int) <> y =: alpha)
-            (Just (Ty alpha), Just (Ty (TypeVar a))) -> return (e, Base t, x =: alpha <> a =: (Base Int))
-            (Just (Ty t1), Just (Ty t2))      -> return (e, Base t, x =: t1 <> y =: t2)
-            (_, _) -> return (e, Base t, x =: (Base Int) <> y =: (Base Int)) 
+            (Just (Ty (TypeVar a)), Nothing)                -> return (e, Base t, a =: (Base Int) <> y =: (Base Int)) 
+            (Nothing, Just (Ty (TypeVar b)))                -> return (e, Base t, x =: (Base Int) <> b =: (Base Int))
+            (Just (Ty (TypeVar a)), Just (Ty alpha))        -> return (e, Base t, a =: (Base Int) <> y =: alpha)
+            (Just (Ty alpha), Just (Ty (TypeVar a)))        -> return (e, Base t, x =: alpha <> a =: (Base Int))
+            (Just (Ty t1), Just (Ty t2))                    -> return (e, Base t, x =: t1 <> y =: t2)
+            (_, _)                                          -> return (e, Base t, x =: (Base Int) <> y =: (Base Int)) 
         (Var x, _)      -> 
           case E.lookup g x of 
             Just (Ty (TypeVar a)) -> return (e, Base t, a =: (Base Int))
@@ -189,21 +191,16 @@ inferExp g (App (App (Prim op) e1) e2) =
         (_, _)          -> return (e, Base t, emptySubst)
     _   -> error "Prim operator not yet supported"
   where 
-    e = App (App (Prim op) e1) e2
-        -- case (e1, e2) of 
-        --       (Var x, Var y) | x == y -> 
-        --         return (App (App (Prim op) e1) e2, Base Int `Arrow` Base t, emptySubst)
-        --       (Var _, Var _)    -> 
-        --         return (App (App (Prim op) e1) e2, Base Int `Arrow` (Base Int `Arrow` Base t), emptySubst)
-        --       (Var _, _)        -> 
-        --         return (App (App (Prim op) e1) e2, Base Int `Arrow` Base t, emptySubst)
-        --       (_, Var _)        -> 
-        --         return (App (App (Prim op) e1) e2, Base Int `Arrow` Base t, emptySubst)
-        --       (_, _)            -> 
+    e = App (App (Prim op) e1) e2 
 
 inferExp g (Let [Bind n _ [] e1] e2) = do
   (e1', t1, s1)  <- inferExp g e1 
-  (e2', t2, s2)  <- inferExp (substGamma s1 (E.add g (n, generalise (substGamma s1 g) t1))) e2 
+  let g' = g `E.add` (n, generalise (substGamma s1 g) t1)
+  -- error $ "Variable " <> (show n) <> " gamma' " <> (show g') 
+  --   <> "\nsubstitution: " <> (show s1)
+  --   <> "\nType " <> (show t1)
+  --   <> "\n\nGenerlised: " <> (show (generalise g t1))
+  (e2', t2, s2)  <- inferExp (substGamma s1 g') e2 
   return ((Let [Bind n (Just $ Ty t1) [] e1'] e2'), t2, s1 <> s2) 
 
 -- Should be working
