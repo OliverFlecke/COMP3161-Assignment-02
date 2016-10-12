@@ -117,8 +117,7 @@ unify t1 t2 = typeError $ TypeMismatch t1 t2
 
 
 generalise :: Gamma -> Type -> QType
-generalise g t = --error $ (show t) <> (show (filter (\x -> not $ elem x (tvGamma g)) (tv t)))
-  foldl (\t' -> \x -> Forall x t') (Ty t) $ filter (\x -> not $ elem x (tvGamma g)) (tv t)
+generalise g t = foldl (\t' -> \x -> Forall x t') (Ty t) $ filter (\x -> not $ elem x (tvGamma g)) (tv t)
 -- Not enterly sure they do they same, so saved for safety 
 -- generalise g t = generaliseHelper (filter (\x -> elem x (tvGamma g)) (tv t)) t
 -- generaliseHelper :: [Id] -> Type -> QType
@@ -130,25 +129,29 @@ generalise g t = --error $ (show t) <> (show (filter (\x -> not $ elem x (tvGamm
 inferProgram :: Gamma -> Program -> TC (Program, Type, Subst)
 inferProgram env [Bind name _ [] exp] = do 
   (e, t, s) <- inferExp env exp 
-  return ([Bind "main" (Just $ Ty (substitute s t)) [] e], substitute s t, s)
+  case generalise env t of 
+    Ty t  -> return ([Bind "main" (Just $ Ty (substitute s t)) [] e], substitute s t, s)
+    _     -> error "The type returned to main is not a valid type"
 inferProgram env bs = error "implement me! don't forget to run the result substitution on the entire expression using allTypes from Syntax.hs"
 
 
 -- Infer expression
 inferExp :: Gamma -> Exp -> TC (Exp, Type, Subst)
 inferExp g (Num n) = return (Num n, Base Int, emptySubst)
-inferExp g (Con var) = do
-  case constType var of 
-    Just (Ty t)   -> return (Con var, t, var =: t)
-    Nothing       -> typeError $ NoSuchVariable var 
 
 inferExp g (Var v) = do
   case E.lookup g v of 
     Just (Ty t)         -> return (Var v, t, v =: t)
     Just (Forall id t)  -> do
       alpha <- fresh 
-      return (Var v, alpha, emptySubst)
+      return (Var v, alpha, id =: alpha)
     Nothing             -> error "Varible not in gamma" 
+
+inferExp g (Con var) = do
+  case constType var of 
+    Just (Ty t)   -> return (Con var, t, var =: t)
+    Nothing       -> typeError $ NoSuchVariable var 
+
 inferExp g (App (Prim Neg) n) = 
   case primOpType Neg of 
     Ty (Base Int `Arrow` Base Int)  ->
@@ -201,23 +204,24 @@ inferExp g (Let [Bind x _ [] e1] e2) = do
   (e2', t', s')  <- inferExp g' e2 
   return ((Let [Bind x (Just $ Ty t) [] e1'] e2'), t', s <> s')
 
-
+-- Let function expression
 inferExp g (Letfun (Bind f _ (x:[]) e)) = do
   alpha1             <- fresh
   alpha2             <- fresh
   let g' = (g `E.addAll` [(x, Ty alpha1), (f, Ty alpha2)])
   (e', t, s)    <- inferExp g' e 
   u             <- unify (substitute s alpha2) (Arrow (substitute s alpha1) t)
-  return (Letfun (Bind f (Just $ Ty (substitute u (substitute s alpha1 `Arrow` t))) (x:[]) e'), 
+  return (Letfun (Bind f (Just $ Ty $ substitute u $ substitute s alpha1 `Arrow` t) (x:[]) e'), 
      substitute u $ substitute s alpha1 `Arrow` t, s <> u)
 
 
+-- Apply expression 
 inferExp g (App e1 e2) = do 
-  a                 <- fresh -- Don't know why I can't just put this instead of a at the end (gixes wrong type)
+  a                 <- fresh 
   (e1', t1, s)      <- inferExp g e1
   (e2', t2, s')     <- inferExp (substGamma s g) e2
-  s''               <- unify (substitute s' t1) (Arrow t2 a)
-  return (App e1' e2', a, s <> s' <> s'')
+  u                 <- unify (substitute s' t1) (Arrow t2 a)
+  return (App e1' e2', substitute u a, u <> s' <> s)
 
 -- If expression
 inferExp g (If e e1 e2) = do 
@@ -232,10 +236,21 @@ inferExp g (If e e1 e2) = do
     t           -> typeError $ TypeMismatch (Base Bool) t
 
 
-inferExp g (Case e [Alt "Inl" [x] e1, Alt "Inr" [y] e2]) = error "Case not yet supported"
+-- -- Note: this is the only case you need to handle for case expressions
+inferExp g (Case e [Alt "Inl" [x] e1, Alt "Inr" [y] e2]) = do
+  alphaL          <- fresh
+  alphaR          <- fresh
+  (e', t, s)      <- inferExp g e
+  let gl = g `E.add` (y, Ty alphaL)
+  (e1', tl, s1)   <- inferExp gl e1
+  let gr = g `E.add` (x, Ty alphaR)
+  (e2', tr, s2)   <- inferExp (substGamma s1 gr) e2
+  u               <- unify (substitute (s2 <> s1 <> s) (Sum alphaL alphaR)) (substitute (s2 <> s1) t)
+  u'              <- unify (substitute (u <> s2) tl) (substitute u tr)
+  return (Case e' [Alt "Inl" [x] e1', Alt "Inr" [y] e2'], substitute (u' <> u) tr, u' <> u <> s2 <> s1 <> s)
+
 inferExp g (Case e _) = typeError MalformedAlternatives
 
 inferExp g _ = error "inferExp: Implement me!"
--- -- Note: this is the only case you need to handle for case expressions
 
 
