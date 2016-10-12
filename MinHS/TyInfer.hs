@@ -199,7 +199,7 @@ inferExp g (Let [Bind x _ [] e1] e2) = do
   (e1', t, s)  <- inferExp g e1 
   let g' = substGamma s $ g `E.add` (x, generalise (substGamma s g) t)
   (e2', t', s')  <- inferExp g' e2 
-  return ((Let [Bind x (Just $ Ty t') [] e1'] e2'), t', s <> s')
+  return ((Let [Bind x (Just $ Ty t) [] e1'] e2'), t', s <> s')
 
 
 inferExp g (Letfun (Bind f _ (x:[]) e)) = do
@@ -218,16 +218,18 @@ inferExp g (App e1 e2) = do
   (e2', t2, s')     <- inferExp (substGamma s g) e2
   s''               <- unify (substitute s' t1) (Arrow t2 a)
   return (App e1' e2', a, s <> s' <> s'')
-inferExp g (If b e1 e2) = do 
-  (b', bt, bs)  <- inferExp g b
-  u             <- unify bt (Base Bool)
-  case substitute (u <> bs) bt of 
+
+-- If expression
+inferExp g (If e e1 e2) = do 
+  (e', t, s)  <- inferExp g e
+  u           <- unify t (Base Bool)
+  case substitute (u <> s) t of 
     Base Bool   -> do
-      (e1', t1, s1)   <- inferExp (substGamma (u <> bs) g) e1
-      (e2', t2, s2)   <- inferExp (substGamma (u <> bs <> s1) g) e2
+      (e1', t1, s1)   <- inferExp (substGamma (u <> s) g) e1
+      (e2', t2, s2)   <- inferExp (substGamma (u <> s <> s1) g) e2
       u'              <- unify (substitute s2 t1) t2 
-      return ((If b' e1' e2'), substitute u' t2, u')
-    t           -> typeError $ TypeMismatch (Base Bool) bt
+      return ((If e' e1' e2'), substitute u' t2, u' <> s2 <> s1 <> u <> s)
+    t           -> typeError $ TypeMismatch (Base Bool) t
 
 
 inferExp g (Case e [Alt "Inl" [x] e1, Alt "Inr" [y] e2]) = error "Case not yet supported"
