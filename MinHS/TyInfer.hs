@@ -145,7 +145,9 @@ inferExp g (Con var) = do
 inferExp g (Var v) = do
   case E.lookup g v of 
     Just (Ty t)         -> return (Var v, t, v =: t)
-    Just (Forall id t)  -> error "InferExp for variables - What to do with foralls?"
+    Just (Forall id t)  -> do
+      alpha <- fresh 
+      return (Var v, alpha, emptySubst)
     Nothing             -> error "Varible not in gamma" 
 inferExp g (App (Prim Neg) n) = 
   case primOpType Neg of 
@@ -193,45 +195,29 @@ inferExp g (App (App (Prim op) e1) e2) =
   where 
     e = App (App (Prim op) e1) e2 
 
-inferExp g (Let [Bind n _ [] e1] e2) = do
-  (e1', t1, s1)  <- inferExp g e1 
-  let g' = g `E.add` (n, generalise (substGamma s1 g) t1)
-  -- error $ "Variable " <> (show n) <> " gamma' " <> (show g') 
-  --   <> "\nsubstitution: " <> (show s1)
-  --   <> "\nType " <> (show t1)
-  --   <> "\n\nGenerlised: " <> (show (generalise g t1))
-  (e2', t2, s2)  <- inferExp (substGamma s1 g') e2 
-  return ((Let [Bind n (Just $ Ty t1) [] e1'] e2'), t2, s1 <> s2) 
-
--- Should be working
-inferExp g (Letfun (Bind n _ (v:vs) e)) = do
-  x             <- fresh
-  f             <- fresh
-  (e', t, s)    <- inferExp (g `E.addAll` [(v, Ty x), (n, Ty f)]) e 
-  un            <- unify (substitute s f) (Arrow (substitute s x) t)
-  return (Letfun (Bind n (Just $ Ty (substitute un f)) (v:vs) e'), 
-      substitute un f, s <> un)
-  -- error $ "Letfun expression type: " 
-  --   <> "\nName x: " <> (show v) <> " Type: " <> (show (Arrow x t)) 
-  --   <> "\nName f: " <> (show n) <> " Type: " <> (show f)
-  --   <> "\nOutput type: " <> (show (substitute (un <> s) f)) 
-  --   <> "\n\nEnvironment " <> (show (g `E.addAll` [(v, Ty x), (n, Ty f)]))
-  --   <> "\noutput " <> (show (s))
-  --   <> "\nun " <> (show un) 
-  --   <> "\nX substituted " <> (show (substitute s x))
+inferExp g (Let [Bind x _ [] e1] e2) = do
+  (e1', t, s)  <- inferExp g e1 
+  let g' = substGamma s $ g `E.add` (x, generalise (substGamma s g) t)
+  (e2', t', s')  <- inferExp g' e2 
+  return ((Let [Bind x (Just $ Ty t') [] e1'] e2'), t', s <> s')
 
 
-
+inferExp g (Letfun (Bind f _ (x:[]) e)) = do
+  alpha1             <- fresh
+  alpha2             <- fresh
+  let g' = (g `E.addAll` [(x, Ty alpha1), (f, Ty alpha2)])
+  (e', t, s)    <- inferExp g' e 
+  u             <- unify (substitute s alpha2) (Arrow (substitute s alpha1) t)
+  return (Letfun (Bind f (Just $ Ty (substitute u (substitute s alpha1 `Arrow` t))) (x:[]) e'), 
+     substitute u $ substitute s alpha1 `Arrow` t, s <> u)
 
 
 inferExp g (App e1 e2) = do 
-  a                 <- fresh -- Don't know why I can't just put this instead of a at the end (gives wrong type)
+  a                 <- fresh -- Don't know why I can't just put this instead of a at the end (gixes wrong type)
   (e1', t1, s)      <- inferExp g e1
   (e2', t2, s')     <- inferExp (substGamma s g) e2
-  -- error $ "Apply infering between " <> (show t1) <> " and " <> (show $ Arrow t2 a) 
   s''               <- unify (substitute s' t1) (Arrow t2 a)
   return (App e1' e2', a, s <> s' <> s'')
-
 inferExp g (If b e1 e2) = do 
   (b', bt, bs)  <- inferExp g b
   u             <- unify bt (Base Bool)
@@ -239,15 +225,15 @@ inferExp g (If b e1 e2) = do
     Base Bool   -> do
       (e1', t1, s1)   <- inferExp (substGamma (u <> bs) g) e1
       (e2', t2, s2)   <- inferExp (substGamma (u <> bs <> s1) g) e2
-      t               <- unify (substitute (s2) t1) t2 
-      return ((If b' e1' e2'), t2, t <> s1 <> s2 <> u <> bs)
+      u'              <- unify (substitute s2 t1) t2 
+      return ((If b' e1' e2'), substitute u' t2, u')
     t           -> typeError $ TypeMismatch (Base Bool) bt
 
 
+inferExp g (Case e [Alt "Inl" [x] e1, Alt "Inr" [y] e2]) = error "Case not yet supported"
+inferExp g (Case e _) = typeError MalformedAlternatives
 
 inferExp g _ = error "inferExp: Implement me!"
 -- -- Note: this is the only case you need to handle for case expressions
--- inferExp g (Case e [Alt "Inl" [x] e1, Alt "Inr" [y] e2])
--- inferExp g (Case e _) = typeError MalformedAlternatives
 
 
