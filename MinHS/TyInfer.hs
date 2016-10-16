@@ -142,15 +142,19 @@ inferExp g (Num n) = return (Num n, Base Int, emptySubst)
 inferExp g (Var v) = do
   case E.lookup g v of 
     Just (Ty t)         -> return (Var v, t, v =: t)
-    Just (Forall id t)  -> do
+    Just (Forall a t)  -> do
       alpha <- fresh 
-      return (Var v, alpha, id =: alpha)
+      return (Var v, alpha, a =: alpha)
     Nothing             -> error "Varible not in gamma" 
 
 inferExp g (Con var) = do
   case constType var of 
-    Just (Ty t)   -> return (Con var, t, var =: t)
-    Nothing       -> typeError $ NoSuchVariable var 
+    Just (Ty t)         -> return (Con var, t, var =: t)
+    Just (Forall a (Forall b (Ty (Arrow (TypeVar _) (Arrow (TypeVar _) t))))) -> do
+      alpha     <- fresh
+      beta      <- fresh
+      return (Con var, t, a =: alpha <> b =: beta)
+    Nothing             -> typeError $ NoSuchVariable var 
 
 inferExp g (App (Prim Neg) n) = 
   case primOpType Neg of 
@@ -214,14 +218,20 @@ inferExp g (Letfun (Bind f _ (x:[]) e)) = do
   return (Letfun (Bind f (Just $ Ty $ substitute u $ substitute s alpha1 `Arrow` t) (x:[]) e'), 
      substitute u $ substitute s alpha1 `Arrow` t, s <> u)
 
+inferExp g (App (App (Con "Pair") e1) e2) = do
+  (e1', t1, s)  <- inferExp g e1
+  (e2', t2, s') <- inferExp g e2
+  return (App (App (Con "Pair") e1') e2', Prod t1 t2, emptySubst)
+
+
 
 -- Apply expression 
 inferExp g (App e1 e2) = do 
-  a                 <- fresh 
+  alpha             <- fresh 
   (e1', t1, s)      <- inferExp g e1
   (e2', t2, s')     <- inferExp (substGamma s g) e2
-  u                 <- unify (substitute s' t1) (Arrow t2 a)
-  return (App e1' e2', substitute u a, u <> s' <> s)
+  u                 <- unify (substitute s' t1) (Arrow t2 alpha)
+  return (App e1' e2', substitute u alpha, u <> s' <> s)
 
 -- If expression
 inferExp g (If e e1 e2) = do 
