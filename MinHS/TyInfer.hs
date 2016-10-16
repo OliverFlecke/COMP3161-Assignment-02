@@ -223,6 +223,25 @@ inferExp g (App (App (Con "Pair") e1) e2) = do
   (e2', t2, s') <- inferExp g e2
   return (App (App (Con "Pair") e1') e2', Prod t1 t2, emptySubst)
 
+-- Fst and Snd operator
+inferExp g (App (Prim Fst) e) = do 
+  (e', t, s)    <- inferExp g e 
+  case (e', t) of 
+    (App (App (Con "Pair") _) _, Prod t' _) -> 
+      return (App (Prim Fst) e', t', s) 
+    _     -> do
+      a <- fresh
+      b <- fresh
+      typeError $ TypeMismatch t (Prod a b)
+inferExp g (App (Prim Snd) e) = do
+  (e', t, s)    <- inferExp g e 
+  case (e', t) of 
+    (App (App (Con "Pair") _) _, Prod _ t') -> 
+      return (App (Prim Snd) e', t', s)
+    _     -> do
+      a <- fresh
+      b <- fresh
+      typeError $ TypeMismatch t (Prod a b)
 
 
 -- Apply expression 
