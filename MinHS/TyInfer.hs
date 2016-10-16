@@ -117,7 +117,7 @@ unify t1 t2 = typeError $ TypeMismatch t1 t2
 
 
 generalise :: Gamma -> Type -> QType
-generalise g t = foldl (\t' -> \x -> Forall x t') (Ty t) $ filter (\x -> elem x (tvGamma g)) (tv t)
+generalise g t = foldl (\t' -> \x -> Forall x t') (Ty t) $ filter (\x -> not $ elem x (tvGamma g)) (tv t)
 -- Not enterly sure they do they same, so saved for safety 
 -- generalise g t = generaliseHelper (filter (\x -> elem x (tvGamma g)) (tv t)) t
 -- generaliseHelper :: [Id] -> Type -> QType
