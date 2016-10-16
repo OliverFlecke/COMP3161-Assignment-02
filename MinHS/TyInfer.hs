@@ -129,9 +129,10 @@ generalise g t = foldl (\t' -> \x -> Forall x t') (Ty t) $ filter (\x -> not $ e
 inferProgram :: Gamma -> Program -> TC (Program, Type, Subst)
 inferProgram env [Bind name _ [] exp] = do 
   (e, t, s) <- inferExp env exp 
-  case generalise env t of 
+  case generalise env (substitute s t) of 
     Ty t  -> return ([Bind "main" (Just $ Ty (substitute s t)) [] e], substitute s t, s)
-    _     -> error "The type returned to main is not a valid type"
+    t'    -> return ([Bind "main" (Just $ t') [] e], substitute s t, s)
+    -- error "The type returned to main is not a valid type"
 inferProgram env bs = error "implement me! don't forget to run the result substitution on the entire expression using allTypes from Syntax.hs"
 
 
@@ -150,10 +151,14 @@ inferExp g (Var v) = do
 inferExp g (Con var) = do
   case constType var of 
     Just (Ty t)         -> return (Con var, t, var =: t)
-    Just (Forall a (Forall b (Ty (Arrow (TypeVar _) (Arrow (TypeVar _) t))))) -> do
+    Just (Forall a (Forall b (Ty t))) -> do
       alpha     <- fresh
       beta      <- fresh
       return (Con var, t, a =: alpha <> b =: beta)
+    -- Just (Forall a (Forall b (Ty (Arrow (TypeVar _) (Arrow (TypeVar _) t))))) -> do
+    --   alpha     <- fresh
+    --   beta      <- fresh
+    --   return (Con var, t, a =: alpha <> b =: beta)
     Nothing             -> typeError $ NoSuchVariable var 
 
 inferExp g (App (Prim Neg) n) = 
@@ -246,9 +251,13 @@ inferExp g (App (Prim Snd) e) = do
 
 -- Apply expression 
 inferExp g (App e1 e2) = do 
-  alpha             <- fresh 
   (e1', t1, s)      <- inferExp g e1
   (e2', t2, s')     <- inferExp (substGamma s g) e2
+  alpha             <- fresh 
+  -- error $ 
+  --   "\n t1 " <> (show t1) 
+  --   <> "\n t2 " <> (show t2)
+  --   <> "\n alpha: " <> (show alpha)
   u                 <- unify (substitute s' t1) (Arrow t2 alpha)
   return (App e1' e2', substitute u alpha, u <> s' <> s)
 
