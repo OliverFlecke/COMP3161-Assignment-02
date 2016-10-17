@@ -184,7 +184,7 @@ inferExp g (Let [Bind x _ [] e1] e2) = do
   (e1', t, s)  <- inferExp g e1 
   let g' = substGamma s $ g `E.add` (x, generalise (substGamma s g) t)
   (e2', t', s')  <- inferExp g' e2 
-  return ((Let [Bind x (Just $ generalise (substGamma s g ) t) [] e1'] e2'), t', s <> s')
+  return ((Let [Bind x (Just $ Ty (substitute s' t)) [] e1'] e2'), t', s <> s')
 
 -- Let function expression
 inferExp g (Letfun (Bind f _ (x:[]) e)) = do
