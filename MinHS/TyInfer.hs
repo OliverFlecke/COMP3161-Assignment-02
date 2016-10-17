@@ -181,20 +181,18 @@ inferExp g (If e e1 e2) = do
 -- Let binding
 inferExp g (Let (x:xs) e2) = do
   (bs, g', s)   <- bindName g (Let (x:xs) e2)  
-  -- (e1', t, s)  <- inferExp g e1 
-  -- let g' = substGamma s $ g `E.add` (x, generalise (substGamma s g) t)
   (e2', t', s')  <- inferExp g' e2 
   return (allTypes (substQType (s' <> s)) (Let bs e2'), t', s <> s')
 
 -- Let function expression
-inferExp g (Letfun (Bind f _ (x:[]) e)) = do
-  alpha1             <- fresh
-  alpha2             <- fresh
-  let g' = (g `E.addAll` [(x, Ty alpha1), (f, Ty alpha2)])
+inferExp g (Letfun (Bind f _ vs e)) = do
+  gb              <- bindFunction g vs
+  alpha           <- fresh
+  let g' = (gb `E.add` (f, Ty alpha))
   (e', t, s)    <- inferExp g' e 
-  u             <- unify (substitute s alpha2) (Arrow (substitute s alpha1) t)
-  let out = allTypes (substQType (s <> u)) $ Letfun (Bind f (Just $ Ty $ substitute u $ substitute s alpha1 `Arrow` t) (x:[]) e')
-  return (out, substitute u $ substitute s alpha1 `Arrow` t, s <> u)   
+  u             <- unify (substitute s alpha) (getFunctionType g' s vs t)
+  let out = allTypes (substQType (s <> u)) $ Letfun (Bind f (Just $ Ty $ substitute u $ getFunctionType g' s vs t) vs e')
+  return (out, substitute u $ getFunctionType g' s vs t, s <> u)   
 
 -- Note: this is the only case you need to handle for case expressions
 inferExp g (Case e [Alt "Inl" [x] e1, Alt "Inr" [y] e2]) = do
@@ -222,3 +220,15 @@ bindName' g (Let ((Bind x _ [] e):xs) eL) bs ss = do
   (e', t, s) <- inferExp g e 
   let g' =  substGamma s $ g `E.add` (x, generalise (substGamma s g) t)
   (bindName' g' (Let xs eL) ((Bind x (Just (generalise g' t)) [] e'):bs) (s <> s))
+
+bindFunction :: Gamma -> [Id] -> TC Gamma
+bindFunction g [] = return $ g 
+bindFunction g (x:xs) = do 
+  alpha <- fresh
+  bindFunction (g `E.add` (x, Ty alpha)) xs
+
+getFunctionType :: Gamma -> Subst -> [Id] -> Type -> Type 
+getFunctionType g s [] t = t
+getFunctionType g s (x:xs) t = 
+  case g `E.lookup` x of 
+    Just (Ty t')  -> Arrow (substitute s t') (getFunctionType g s xs t)
