@@ -119,11 +119,10 @@ unify t1 t2 = typeError $ TypeMismatch t1 t2
 
 generalise :: Gamma -> Type -> QType
 generalise g t = foldl (\t' -> \x -> Forall x t') (Ty t) $ reverse $ filter (\x -> not $ elem x (tvGamma g)) (tv t)
--- Not enterly sure they do they same, so saved for safety 
--- generalise g t = generaliseHelper (filter (\x -> elem x (tvGamma g)) (tv t)) t
--- generaliseHelper :: [Id] -> Type -> QType
--- generaliseHelper (x:xs) t = Forall x $ generaliseHelper xs t
--- generaliseHelper [] t = Ty t
+
+-- replaceTypes :: Exp -> [Id] -> Subst -> Exp 
+-- replaceTypes e [] s = e
+-- replaceTypes e (x:xs) s = allTypes (substQType s) e
 
 -- Infer program
 inferProgram :: Gamma -> Program -> TC (Program, Type, Subst)
@@ -165,7 +164,7 @@ inferExp g (App e1 e2) = do
   (e2', t2, s')     <- inferExp (substGamma s g) e2
   alpha             <- fresh 
   u                 <- unify (substitute s' t1) (Arrow t2 alpha)
-  return (App e1' e2', substitute u alpha, u <> s' <> s)
+  return (App (allTypes (substQType (u <> s')) e1') e2', substitute u alpha, u <> s' <> s)
 
 -- If expression
 inferExp g (If e e1 e2) = do 
@@ -194,10 +193,10 @@ inferExp g (Letfun (Bind f _ (x:[]) e)) = do
   let g' = (g `E.addAll` [(x, Ty alpha1), (f, Ty alpha2)])
   (e', t, s)    <- inferExp g' e 
   u             <- unify (substitute s alpha2) (Arrow (substitute s alpha1) t)
-  let out = allTypes (\z -> if z == (Ty (TypeVar x)) then substQType s (Ty alpha1) else z) $ Letfun (Bind f (Just $ Ty $ substitute u $ substitute s alpha1 `Arrow` t) (x:[]) e')
+  let out = allTypes (substQType (s <> u)) $ Letfun (Bind f (Just $ Ty $ substitute u $ substitute s alpha1 `Arrow` t) (x:[]) e')
   return (out, substitute u $ substitute s alpha1 `Arrow` t, s <> u)   
 
--- -- Note: this is the only case you need to handle for case expressions
+-- Note: this is the only case you need to handle for case expressions
 inferExp g (Case e [Alt "Inl" [x] e1, Alt "Inr" [y] e2]) = do
   (e', t, s)      <- inferExp g e
   alphaL          <- fresh
