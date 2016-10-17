@@ -179,7 +179,8 @@ inferExp g (If e e1 e2) = do
     t           -> typeError $ TypeMismatch (Base Bool) t
 
 -- Let binding
-inferExp g (Let [Bind x _ [] e1] e2) = do
+inferExp g (Let ((Bind x t0 [] e1):xs) e2) = do
+  -- (bs, t, s)   <- bindName g (Let ((Bind x t0 [] e1):[]) e2)  
   (e1', t, s)  <- inferExp g e1 
   let g' = substGamma s $ g `E.add` (x, generalise (substGamma s g) t)
   (e2', t', s')  <- inferExp g' e2 
@@ -212,3 +213,10 @@ inferExp g (Case e [Alt "Inl" [x] e1, Alt "Inr" [y] e2]) = do
 inferExp g (Case e _) = typeError MalformedAlternatives
 
 inferExp g _ = error "inferExp: Implement me!"
+
+-- bindName :: Gamma -> Exp -> ([Bind], Gamma, Subst)
+-- bindName g e = bindName' g e 
+
+-- bindName' :: Gamma -> Exp -> [Bind] -> ([Bind], Gamma, Subst)
+-- bindName' g (Let [] e) bs = (bs, g, s)
+-- bindName' g (Let ((Bind x _ [] e):xs) eL) bs = inferExp g e 
