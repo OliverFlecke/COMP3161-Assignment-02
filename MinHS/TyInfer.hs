@@ -132,7 +132,6 @@ inferProgram env [Bind name _ [] exp] = do
     -- error "The type returned to main is not a valid type"
 inferProgram env bs = error "implement me! don't forget to run the result substitution on the entire expression using allTypes from Syntax.hs"
 
-
 -- Infer expression
 inferExp :: Gamma -> Exp -> TC (Exp, Type, Subst)
 inferExp g (Num n) = return (Num n, Base Int, emptySubst)
@@ -140,10 +139,10 @@ inferExp g (Num n) = return (Num n, Base Int, emptySubst)
 inferExp g (Var v) = do
   case E.lookup g v of 
     Just (Ty t)         -> return (Var v, t, v =: t)
-    Just (Forall a t)  -> do
+    Just (Forall a (Ty t))  -> do
       alpha <- fresh 
       return (Var v, alpha, a =: alpha)
-    Nothing             -> error "Varible not in gamma" 
+    Nothing             -> typeError $ NoSuchVariable v 
 
 inferExp g (Con var) = do
   case constType var of 

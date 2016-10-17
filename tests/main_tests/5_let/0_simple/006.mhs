@@ -14,9 +14,9 @@ main
     -- f x  = g (4 + 1) 10
     in let
         f
-          = letfun m x =
+          = letfun f x =
               if x == 10 then 10
-                         else let y = m (x+1);
+                         else let y = f (x+1);
                               in
                               plus (let z = 4; 
                                     in inc z) y ;
