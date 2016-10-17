@@ -200,10 +200,10 @@ inferExp g (Letfun (Bind f _ (x:[]) e)) = do
 inferExp g (Case e [Alt "Inl" [x] e1, Alt "Inr" [y] e2]) = do
   (e', t, s)      <- inferExp g e
   alphaL          <- fresh
-  let gl = g `E.add` (y, Ty alphaL)
+  let gl = g `E.add` (x, Ty alphaL)
   (e1', tl, s1)   <- inferExp gl e1
   alphaR          <- fresh
-  let gr = g `E.add` (x, Ty alphaR)
+  let gr = g `E.add` (y, Ty alphaR)
   (e2', tr, s2)   <- inferExp (substGamma s1 gr) e2
   u               <- unify (substitute (s2 <> s1 <> s) (Sum alphaL alphaR)) (substitute (s2 <> s1) t)
   u'              <- unify (substitute (u <> s2) tl) (substitute u tr)
