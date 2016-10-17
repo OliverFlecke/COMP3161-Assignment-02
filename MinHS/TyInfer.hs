@@ -179,12 +179,12 @@ inferExp g (If e e1 e2) = do
     t           -> typeError $ TypeMismatch (Base Bool) t
 
 -- Let binding
-inferExp g (Let ((Bind x t0 [] e1):xs) e2) = do
-  -- (bs, g', s)   <- bindName g (Let ((Bind x t0 [] e1):[]) e2)  
-  (e1', t, s)  <- inferExp g e1 
-  let g' = substGamma s $ g `E.add` (x, generalise (substGamma s g) t)
+inferExp g (Let (x:xs) e2) = do
+  (bs, g', s)   <- bindName g (Let (x:xs) e2)  
+  -- (e1', t, s)  <- inferExp g e1 
+  -- let g' = substGamma s $ g `E.add` (x, generalise (substGamma s g) t)
   (e2', t', s')  <- inferExp g' e2 
-  return (allTypes (substQType (s' <> s)) (Let [Bind x (Just (generalise g' t)) [] e1'] e2'), t', s <> s')
+  return (allTypes (substQType (s' <> s)) (Let bs e2'), t', s <> s')
 
 -- Let function expression
 inferExp g (Letfun (Bind f _ (x:[]) e)) = do
@@ -213,9 +213,12 @@ inferExp g (Case e _) = typeError MalformedAlternatives
 
 inferExp g _ = error "inferExp: Implement me!"
 
--- bindName :: Gamma -> Exp -> ([Bind], Gamma, Subst)
--- bindName g e = bindName' g e 
+bindName :: Gamma -> Exp -> TC ([Bind], Gamma, Subst)
+bindName g e = bindName' g e [] emptySubst
 
--- bindName' :: Gamma -> Exp -> [Bind] -> ([Bind], Gamma, Subst)
--- bindName' g (Let [] e) bs = (bs, g, s)
--- bindName' g (Let ((Bind x _ [] e):xs) eL) bs = inferExp g e 
+bindName' :: Gamma -> Exp -> [Bind] -> Subst -> TC ([Bind], Gamma, Subst)
+bindName' g (Let [] eL) bs s = return $ (reverse bs, g, s)
+bindName' g (Let ((Bind x _ [] e):xs) eL) bs ss = do
+  (e', t, s) <- inferExp g e 
+  let g' =  substGamma s $ g `E.add` (x, generalise (substGamma s g) t)
+  (bindName' g' (Let xs eL) ((Bind x (Just (generalise g' t)) [] e'):bs) (s <> s))
