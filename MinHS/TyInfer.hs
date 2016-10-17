@@ -99,7 +99,7 @@ unify (Base t1) (Base t2) =
     then return emptySubst 
     else typeError $ TypeMismatch (Base t1) (Base t2)
 unify (Prod t11 t12) (Prod t21 t22) = do
-  s     <- unify t11 t12
+  s     <- unify t11 t21
   s'    <- unify (substitute s t12) (substitute s t22)
   return $ s <> s'
 unify (Sum t11 t12) (Sum t21 t22) = do
@@ -160,7 +160,7 @@ inferExp g (Con v) = do
     Just t        -> do
       (s, t')   <- refreshForall t 
       return (Con v, t', s)
-    Nothing       -> typeError $ NoSuchVariable v 
+    Nothing       -> typeError $ NoSuchConstructor v 
 
 -- Prim ops
 inferExp g (Prim op) = 
