@@ -113,8 +113,6 @@ unify (TypeVar v) t =
     else return $ v =: t
 unify t (TypeVar v) = unify (TypeVar v) t
 unify t1 t2 = typeError $ TypeMismatch t1 t2
- -- error $ "No unifer found between " <> (show t1) <> " and " <> (show t2)
-
 
 generalise :: Gamma -> Type -> QType
 generalise g t = foldl (\t' -> \x -> Forall x t') (Ty t) $ filter (\x -> not $ elem x (tvGamma g)) (tv t)
@@ -123,6 +121,10 @@ generalise g t = foldl (\t' -> \x -> Forall x t') (Ty t) $ filter (\x -> not $ e
 -- generaliseHelper :: [Id] -> Type -> QType
 -- generaliseHelper (x:xs) t = Forall x $ generaliseHelper xs t
 -- generaliseHelper [] t = Ty t
+
+-- Helper functions 
+
+
 
 
 -- Infer program
@@ -220,14 +222,20 @@ inferExp g (Letfun (Bind f _ (x:[]) e)) = do
   let g' = (g `E.addAll` [(x, Ty alpha1), (f, Ty alpha2)])
   (e', t, s)    <- inferExp g' e 
   u             <- unify (substitute s alpha2) (Arrow (substitute s alpha1) t)
-  return (Letfun (Bind f (Just $ Ty $ substitute u $ substitute s alpha1 `Arrow` t) (x:[]) e'), 
-     substitute u $ substitute s alpha1 `Arrow` t, s <> u)
+  let out = allTypes (\z -> if z == (Ty (TypeVar x)) then substQType s (Ty alpha1) else z) $ Letfun (Bind f (Just $ Ty $ substitute u $ substitute s alpha1 `Arrow` t) (x:[]) e')
+  return (out, substitute u $ substitute s alpha1 `Arrow` t, s <> u)   
+
+
+
+
+
+
+
 
 inferExp g (App (App (Con "Pair") e1) e2) = do
   (e1', t1, s)  <- inferExp g e1
   (e2', t2, s') <- inferExp g e2
   return (App (App (Con "Pair") e1') e2', Prod t1 t2, emptySubst)
-
 -- Fst and Snd operator
 inferExp g (App (Prim Fst) e) = do 
   (e', t, s)    <- inferExp g e 
@@ -254,10 +262,6 @@ inferExp g (App e1 e2) = do
   (e1', t1, s)      <- inferExp g e1
   (e2', t2, s')     <- inferExp (substGamma s g) e2
   alpha             <- fresh 
-  -- error $ 
-  --   "\n t1 " <> (show t1) 
-  --   <> "\n t2 " <> (show t2)
-  --   <> "\n alpha: " <> (show alpha)
   u                 <- unify (substitute s' t1) (Arrow t2 alpha)
   return (App e1' e2', substitute u alpha, u <> s' <> s)
 
@@ -276,11 +280,11 @@ inferExp g (If e e1 e2) = do
 
 -- -- Note: this is the only case you need to handle for case expressions
 inferExp g (Case e [Alt "Inl" [x] e1, Alt "Inr" [y] e2]) = do
-  alphaL          <- fresh
-  alphaR          <- fresh
   (e', t, s)      <- inferExp g e
+  alphaL          <- fresh
   let gl = g `E.add` (y, Ty alphaL)
   (e1', tl, s1)   <- inferExp gl e1
+  alphaR          <- fresh
   let gr = g `E.add` (x, Ty alphaR)
   (e2', tr, s2)   <- inferExp (substGamma s1 gr) e2
   u               <- unify (substitute (s2 <> s1 <> s) (Sum alphaL alphaR)) (substitute (s2 <> s1) t)
@@ -290,5 +294,3 @@ inferExp g (Case e [Alt "Inl" [x] e1, Alt "Inr" [y] e2]) = do
 inferExp g (Case e _) = typeError MalformedAlternatives
 
 inferExp g _ = error "inferExp: Implement me!"
-
-
