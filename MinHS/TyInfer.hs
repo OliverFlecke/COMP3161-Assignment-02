@@ -125,13 +125,6 @@ generalise g t = foldl (\t' -> \x -> Forall x t') (Ty t) $ reverse $ filter (\x 
 -- generaliseHelper (x:xs) t = Forall x $ generaliseHelper xs t
 -- generaliseHelper [] t = Ty t
 
-refreshForall :: QType -> TC (Subst, Type)
-refreshForall (Ty t) = return (emptySubst, t)
-refreshForall (Forall a t) = do
-  alpha     <- fresh
-  (s, t')   <- refreshForall t 
-  return (a =: alpha <> s, t')
-
 -- Infer program
 inferProgram :: Gamma -> Program -> TC (Program, Type, Subst)
 inferProgram env [Bind name _ [] exp] = do 
@@ -139,7 +132,6 @@ inferProgram env [Bind name _ [] exp] = do
   case generalise env (substitute s t) of 
     Ty t  -> return ([Bind "main" (Just $ Ty (substitute s t)) [] e], substitute s t, s)
     t'    -> return ([Bind "main" (Just $ t') [] e], substitute s t, s)
-    -- error "The type returned to main is not a valid type"
 inferProgram env bs = error "implement me! don't forget to run the result substitution on the entire expression using allTypes from Syntax.hs"
 
 -- Infer expression
@@ -149,25 +141,23 @@ inferExp g (Num n) = return (Num n, Base Int, emptySubst)
 -- Variables
 inferExp g (Var v) = do
   case E.lookup g v of 
-    Just t        -> do
-      (s, t')   <- refreshForall t
-      return (Var v, t', s)
+    Just t        -> do 
+      t'  <- unquantify t 
+      return (Var v, t', emptySubst)
     Nothing       -> typeError $ NoSuchVariable v 
 
 -- Constructor types
 inferExp g (Con v) = do
   case constType v of 
-    Just t        -> do
-      (s, t')   <- refreshForall t 
-      return (Con v, t', s)
+    Just t        -> do 
+      t' <- unquantify t
+      return (Con v, t', emptySubst)
     Nothing       -> typeError $ NoSuchConstructor v 
 
 -- Prim ops
-inferExp g (Prim op) = 
-  case primOpType op of 
-    t   -> do 
-      (s, t')   <- refreshForall t
-      return (Prim op, t', s)
+inferExp g (Prim op) = do 
+  t' <- unquantify (primOpType op)
+  return (Prim op, t', emptySubst)
 
 -- Apply expression 
 inferExp g (App e1 e2) = do 
