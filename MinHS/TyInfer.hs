@@ -122,11 +122,6 @@ generalise g t = foldl (\t' -> \x -> Forall x t') (Ty t) $ filter (\x -> not $ e
 -- generaliseHelper (x:xs) t = Forall x $ generaliseHelper xs t
 -- generaliseHelper [] t = Ty t
 
--- Helper functions 
-
-
-
-
 -- Infer program
 inferProgram :: Gamma -> Program -> TC (Program, Type, Subst)
 inferProgram env [Bind name _ [] exp] = do 
@@ -157,57 +152,15 @@ inferExp g (Con var) = do
       alpha     <- fresh
       beta      <- fresh
       return (Con var, t, a =: alpha <> b =: beta)
-    -- Just (Forall a (Forall b (Ty (Arrow (TypeVar _) (Arrow (TypeVar _) t))))) -> do
-    --   alpha     <- fresh
-    --   beta      <- fresh
-    --   return (Con var, t, a =: alpha <> b =: beta)
     Nothing             -> typeError $ NoSuchVariable var 
 
-inferExp g (App (Prim Neg) n) = 
-  case primOpType Neg of 
-    Ty (Base Int `Arrow` Base Int)  ->
-      case n of 
-        Var v   ->
-          case E.lookup g v of 
-            Just (Ty (TypeVar a)) -> return (e, Base Int, a =: (Base Int))
-            Just (Ty alpha)       -> return (e, Base Int, v =: alpha)
-            Nothing               -> return (e, Base Int, emptySubst) 
-        _  -> return (e, Base Int, emptySubst)
-    Ty t  -> typeError $ TypeMismatch (Base Int) t
-  where 
-    e = App (Prim Neg) n
-inferExp g (App (App (Prim op) e1) e2) = 
+inferExp g (Prim op) = 
   case primOpType op of 
-    Ty (Base Int `Arrow` (Base Int `Arrow` Base t)) -> 
-      case (e1, e2) of 
-        (Var x, Var y) | x == y -> 
-          case E.lookup g x of 
-            Just (Ty (TypeVar a)) -> return (e, Base t, a =: (Base Int))
-            Just (Ty alpha)       -> return (e, Base t, x =: alpha)
-            Nothing               -> return (e, Base t, x =: (Base Int))
-        (Var x, Var y)  -> 
-          case (E.lookup g x, E.lookup g y) of 
-            (Just (Ty (TypeVar a)), Just (Ty (TypeVar b)))  -> return (e, Base t, a =: (Base Int) <> b =: (Base Int))
-            (Just (Ty (TypeVar a)), Nothing)                -> return (e, Base t, a =: (Base Int) <> y =: (Base Int)) 
-            (Nothing, Just (Ty (TypeVar b)))                -> return (e, Base t, x =: (Base Int) <> b =: (Base Int))
-            (Just (Ty (TypeVar a)), Just (Ty alpha))        -> return (e, Base t, a =: (Base Int) <> y =: alpha)
-            (Just (Ty alpha), Just (Ty (TypeVar a)))        -> return (e, Base t, x =: alpha <> a =: (Base Int))
-            (Just (Ty t1), Just (Ty t2))                    -> return (e, Base t, x =: t1 <> y =: t2)
-            (_, _)                                          -> return (e, Base t, x =: (Base Int) <> y =: (Base Int)) 
-        (Var x, _)      -> 
-          case E.lookup g x of 
-            Just (Ty (TypeVar a)) -> return (e, Base t, a =: (Base Int))
-            Just (Ty alpha)       -> return (e, Base t, x =: alpha)
-            Nothing               -> return (e, Base t, x =: (Base Int))
-        (_, Var x)      -> 
-          case E.lookup g x of 
-            Just (Ty (TypeVar a)) -> return (e, Base t, a =: (Base Int))
-            Just (Ty alpha)       -> return (e, Base t, x =: alpha)
-            Nothing               -> return (e, Base t, x =: (Base Int))
-        (_, _)          -> return (e, Base t, emptySubst)
-    _   -> error "Prim operator not yet supported"
-  where 
-    e = App (App (Prim op) e1) e2 
+    Ty t  -> return (Prim op, t, emptySubst)
+    (Forall a (Forall b (Ty t)))    -> do 
+      alpha <- fresh
+      beta  <- fresh
+      return (Prim op, t, a =: alpha <> b =: beta)
 
 inferExp g (Let [Bind x _ [] e1] e2) = do
   (e1', t, s)  <- inferExp g e1 
@@ -224,38 +177,6 @@ inferExp g (Letfun (Bind f _ (x:[]) e)) = do
   u             <- unify (substitute s alpha2) (Arrow (substitute s alpha1) t)
   let out = allTypes (\z -> if z == (Ty (TypeVar x)) then substQType s (Ty alpha1) else z) $ Letfun (Bind f (Just $ Ty $ substitute u $ substitute s alpha1 `Arrow` t) (x:[]) e')
   return (out, substitute u $ substitute s alpha1 `Arrow` t, s <> u)   
-
-
-
-
-
-
-
-
-inferExp g (App (App (Con "Pair") e1) e2) = do
-  (e1', t1, s)  <- inferExp g e1
-  (e2', t2, s') <- inferExp g e2
-  return (App (App (Con "Pair") e1') e2', Prod t1 t2, emptySubst)
--- Fst and Snd operator
-inferExp g (App (Prim Fst) e) = do 
-  (e', t, s)    <- inferExp g e 
-  case (e', t) of 
-    (App (App (Con "Pair") _) _, Prod t' _) -> 
-      return (App (Prim Fst) e', t', s) 
-    _     -> do
-      a <- fresh
-      b <- fresh
-      typeError $ TypeMismatch t (Prod a b)
-inferExp g (App (Prim Snd) e) = do
-  (e', t, s)    <- inferExp g e 
-  case (e', t) of 
-    (App (App (Con "Pair") _) _, Prod _ t') -> 
-      return (App (Prim Snd) e', t', s)
-    _     -> do
-      a <- fresh
-      b <- fresh
-      typeError $ TypeMismatch t (Prod a b)
-
 
 -- Apply expression 
 inferExp g (App e1 e2) = do 
