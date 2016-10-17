@@ -104,11 +104,11 @@ unify (Prod t11 t12) (Prod t21 t22) = do
   return $ s <> s'
 unify (Sum t11 t12) (Sum t21 t22) = do
   s     <- unify t11 t21
-  s'    <- unify t12 t22
+  s'    <- unify (substitute s t12) t22
   return $ s <> s'
 unify (Arrow t11 t12) (Arrow t21 t22) = do
   s     <- unify t11 t21 
-  s'    <- unify t12 t22
+  s'    <- unify (substitute s t12) t22
   return $ s <> s'
 unify (TypeVar v) t = 
   if elem v (tv t)  -- Should check if v is in the type t
@@ -128,9 +128,9 @@ generalise g t = foldl (\t' -> \x -> Forall x t') (Ty t) $ filter (\x -> not $ e
 refreshForall :: QType -> TC (Subst, Type)
 refreshForall (Ty t) = return (emptySubst, t)
 refreshForall (Forall a t) = do
-  alpha   <- fresh
-  (s, t)  <- refreshForall t 
-  return (a =: alpha <> s, t)
+  alpha     <- fresh
+  (s, t')   <- refreshForall t 
+  return (a =: alpha <> s, t')
 
 -- Infer program
 inferProgram :: Gamma -> Program -> TC (Program, Type, Subst)
