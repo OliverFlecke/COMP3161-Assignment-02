@@ -102,7 +102,10 @@ unify (Prod t11 t12) (Prod t21 t22) = do
   s     <- unify t11 t12
   s'    <- unify (substitute s t12) (substitute s t22)
   return $ s <> s'
-unify (Sum t11 t12) (Sum t21 t22) = unify (Prod t11 t12) (Prod t21 t22)
+unify (Sum t11 t12) (Sum t21 t22) = do
+  s     <- unify t11 t21
+  s'    <- unify t12 t22
+  return $ s <> s'
 unify (Arrow t11 t12) (Arrow t21 t22) = do
   s     <- unify t11 t21 
   s'    <- unify t12 t22
@@ -122,6 +125,13 @@ generalise g t = foldl (\t' -> \x -> Forall x t') (Ty t) $ filter (\x -> not $ e
 -- generaliseHelper (x:xs) t = Forall x $ generaliseHelper xs t
 -- generaliseHelper [] t = Ty t
 
+refreshForall :: QType -> TC (Subst, Type)
+refreshForall (Ty t) = return (emptySubst, t)
+refreshForall (Forall a t) = do
+  alpha   <- fresh
+  (s, t)  <- refreshForall t 
+  return (a =: alpha <> s, t)
+
 -- Infer program
 inferProgram :: Gamma -> Program -> TC (Program, Type, Subst)
 inferProgram env [Bind name _ [] exp] = do 
@@ -136,46 +146,28 @@ inferProgram env bs = error "implement me! don't forget to run the result substi
 inferExp :: Gamma -> Exp -> TC (Exp, Type, Subst)
 inferExp g (Num n) = return (Num n, Base Int, emptySubst)
 
+-- Variables
 inferExp g (Var v) = do
   case E.lookup g v of 
-    Just (Ty t)         -> return (Var v, t, v =: t)
-    Just (Forall a (Ty t))  -> do
-      alpha <- fresh 
-      return (Var v, alpha, a =: alpha)
-    Nothing             -> typeError $ NoSuchVariable v 
+    Just t        -> do
+      (s, t')   <- refreshForall t
+      return (Var v, t', s)
+    Nothing       -> typeError $ NoSuchVariable v 
 
-inferExp g (Con var) = do
-  case constType var of 
-    Just (Ty t)         -> return (Con var, t, var =: t)
-    Just (Forall a (Forall b (Ty t))) -> do
-      alpha     <- fresh
-      beta      <- fresh
-      return (Con var, t, a =: alpha <> b =: beta)
-    Nothing             -> typeError $ NoSuchVariable var 
+-- Constructor types
+inferExp g (Con v) = do
+  case constType v of 
+    Just t        -> do
+      (s, t')   <- refreshForall t 
+      return (Con v, t', s)
+    Nothing       -> typeError $ NoSuchVariable v 
 
+-- Prim ops
 inferExp g (Prim op) = 
   case primOpType op of 
-    Ty t  -> return (Prim op, t, emptySubst)
-    (Forall a (Forall b (Ty t)))    -> do 
-      alpha <- fresh
-      beta  <- fresh
-      return (Prim op, t, a =: alpha <> b =: beta)
-
-inferExp g (Let [Bind x _ [] e1] e2) = do
-  (e1', t, s)  <- inferExp g e1 
-  let g' = substGamma s $ g `E.add` (x, generalise (substGamma s g) t)
-  (e2', t', s')  <- inferExp g' e2 
-  return ((Let [Bind x (Just $ Ty t) [] e1'] e2'), t', s <> s')
-
--- Let function expression
-inferExp g (Letfun (Bind f _ (x:[]) e)) = do
-  alpha1             <- fresh
-  alpha2             <- fresh
-  let g' = (g `E.addAll` [(x, Ty alpha1), (f, Ty alpha2)])
-  (e', t, s)    <- inferExp g' e 
-  u             <- unify (substitute s alpha2) (Arrow (substitute s alpha1) t)
-  let out = allTypes (\z -> if z == (Ty (TypeVar x)) then substQType s (Ty alpha1) else z) $ Letfun (Bind f (Just $ Ty $ substitute u $ substitute s alpha1 `Arrow` t) (x:[]) e')
-  return (out, substitute u $ substitute s alpha1 `Arrow` t, s <> u)   
+    t   -> do 
+      (s, t')   <- refreshForall t
+      return (Prim op, t', s)
 
 -- Apply expression 
 inferExp g (App e1 e2) = do 
@@ -192,11 +184,27 @@ inferExp g (If e e1 e2) = do
   case substitute (u <> s) t of 
     Base Bool   -> do
       (e1', t1, s1)   <- inferExp (substGamma (u <> s) g) e1
-      (e2', t2, s2)   <- inferExp (substGamma (u <> s <> s1) g) e2
+      (e2', t2, s2)   <- inferExp (substGamma (s1 <> u <> s) g) e2
       u'              <- unify (substitute s2 t1) t2 
       return ((If e' e1' e2'), substitute u' t2, u' <> s2 <> s1 <> u <> s)
     t           -> typeError $ TypeMismatch (Base Bool) t
 
+-- Let binding
+inferExp g (Let [Bind x _ [] e1] e2) = do
+  (e1', t, s)  <- inferExp g e1 
+  let g' = substGamma s $ g `E.add` (x, generalise (substGamma s g) t)
+  (e2', t', s')  <- inferExp g' e2 
+  return ((Let [Bind x (Just $ Ty t) [] e1'] e2'), t', s <> s')
+
+-- Let function expression
+inferExp g (Letfun (Bind f _ (x:[]) e)) = do
+  alpha1             <- fresh
+  alpha2             <- fresh
+  let g' = (g `E.addAll` [(x, Ty alpha1), (f, Ty alpha2)])
+  (e', t, s)    <- inferExp g' e 
+  u             <- unify (substitute s alpha2) (Arrow (substitute s alpha1) t)
+  let out = allTypes (\z -> if z == (Ty (TypeVar x)) then substQType s (Ty alpha1) else z) $ Letfun (Bind f (Just $ Ty $ substitute u $ substitute s alpha1 `Arrow` t) (x:[]) e')
+  return (out, substitute u $ substitute s alpha1 `Arrow` t, s <> u)   
 
 -- -- Note: this is the only case you need to handle for case expressions
 inferExp g (Case e [Alt "Inl" [x] e1, Alt "Inr" [y] e2]) = do
