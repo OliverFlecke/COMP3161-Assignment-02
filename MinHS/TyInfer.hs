@@ -180,12 +180,11 @@ inferExp g (If e e1 e2) = do
 
 -- Let binding
 inferExp g (Let ((Bind x t0 [] e1):xs) e2) = do
-  -- (bs, t, s)   <- bindName g (Let ((Bind x t0 [] e1):[]) e2)  
+  -- (bs, g', s)   <- bindName g (Let ((Bind x t0 [] e1):[]) e2)  
   (e1', t, s)  <- inferExp g e1 
   let g' = substGamma s $ g `E.add` (x, generalise (substGamma s g) t)
   (e2', t', s')  <- inferExp g' e2 
-  return ((Let [Bind x (Just $ generalise (substGamma (s' <> s) g) 
-    (substitute s' t)) [] e1'] e2'), t', s <> s')
+  return (allTypes (substQType (s' <> s)) (Let [Bind x (Just (Ty t)) [] e1'] e2'), t', s <> s')
 
 -- Let function expression
 inferExp g (Letfun (Bind f _ (x:[]) e)) = do
