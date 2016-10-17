@@ -104,11 +104,11 @@ unify (Prod t11 t12) (Prod t21 t22) = do
   return $ s <> s'
 unify (Sum t11 t12) (Sum t21 t22) = do
   s     <- unify t11 t21
-  s'    <- unify (substitute s t12) t22
+  s'    <- unify (substitute s t12) (substitute s t22)
   return $ s <> s'
 unify (Arrow t11 t12) (Arrow t21 t22) = do
   s     <- unify t11 t21 
-  s'    <- unify (substitute s t12) t22
+  s'    <- unify (substitute s t12) (substitute s t22)
   return $ s <> s'
 unify (TypeVar v) t = 
   if elem v (tv t)  -- Should check if v is in the type t
