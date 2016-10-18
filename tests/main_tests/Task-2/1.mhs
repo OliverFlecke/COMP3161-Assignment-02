@@ -1,0 +1,4 @@
+main = letrec a = b;
+             b = c;
+             c = 7;
+        in c + a;

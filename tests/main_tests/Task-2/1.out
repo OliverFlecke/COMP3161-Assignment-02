@@ -1,0 +1,5 @@
+main :: Int
+    = letrec a :: Int = b;
+             b :: Int = c;
+             c :: Int = 7;
+        in c + a;

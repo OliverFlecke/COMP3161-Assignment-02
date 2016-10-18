@@ -180,7 +180,7 @@ inferExp g (If e e1 e2) = do
 
 -- Let binding
 inferExp g (Let (x:xs) e2) = do
-  (bs, g', s)   <- bindName g (Let (x:xs) e2)  
+  (bs, g', s)    <- bindName g (x:xs)  
   (e2', t', s')  <- inferExp g' e2 
   return (allTypes (substQType (s' <> s)) (Let bs e2'), t', s <> s')
 
@@ -209,17 +209,22 @@ inferExp g (Case e [Alt "Inl" [x] e1, Alt "Inr" [y] e2]) = do
 
 inferExp g (Case e _) = typeError MalformedAlternatives
 
+-- Letrec
+inferExp g (Letrec bs e) = error "Letrec binding"
+
 inferExp g _ = error "inferExp: Implement me!"
 
-bindName :: Gamma -> Exp -> TC ([Bind], Gamma, Subst)
-bindName g e = bindName' g e [] emptySubst
+-- bindNameRec :: Gamma -> Exp 
 
-bindName' :: Gamma -> Exp -> [Bind] -> Subst -> TC ([Bind], Gamma, Subst)
-bindName' g (Let [] eL) bs s = return $ (reverse bs, g, s)
-bindName' g (Let ((Bind x _ [] e):xs) eL) bs ss = do
+bindName :: Gamma -> [Bind] -> TC ([Bind], Gamma, Subst)
+bindName g bs = bindName' g bs [] emptySubst
+
+bindName' :: Gamma -> [Bind] -> [Bind] -> Subst -> TC ([Bind], Gamma, Subst)
+bindName' g [] bs s = return $ (reverse bs, g, s)
+bindName' g ((Bind x _ [] e):xs) bs ss = do
   (e', t, s) <- inferExp g e 
   let g' =  substGamma s $ g `E.add` (x, generalise (substGamma s g) t)
-  (bindName' g' (Let xs eL) ((Bind x (Just (generalise g' t)) [] e'):bs) (s <> s))
+  (bindName' g' xs ((Bind x (Just (generalise g' t)) [] e'):bs) (s <> s))
 
 bindFunction :: Gamma -> [Id] -> TC Gamma
 bindFunction g [] = return $ g 
