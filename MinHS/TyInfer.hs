@@ -179,18 +179,18 @@ inferExp g (If e e1 e2) = do
     t           -> typeError $ TypeMismatch (Base Bool) t
 
 -- Let binding
-inferExp g (Let (x:xs) e2) = do
-  (bs, g', s)    <- bindName g (x:xs)  
-  (e2', t', s')  <- inferExp g' e2 
-  return (allTypes (substQType (s' <> s)) (Let bs e2'), t', s <> s')
+inferExp g (Let bs e) = do
+  (bs', g', s)    <- bindName g bs  
+  (e', t', s')   <- inferExp g' e 
+  return (allTypes (substQType (s' <> s)) (Let bs' e'), t', s <> s')
 
 -- Let function expression
 inferExp g (Letfun (Bind f _ vs e)) = do
   gb              <- bindFunction g vs
   alpha           <- fresh
   let g' = (gb `E.add` (f, Ty alpha))
-  (e', t, s)    <- inferExp g' e 
-  u             <- unify (substitute s alpha) (getFunctionType g' s vs t)
+  (e', t, s)      <- inferExp g' e 
+  u               <- unify (substitute s alpha) (getFunctionType g' s vs t)
   let out = allTypes (substQType (s <> u)) $ Letfun (Bind f (Just $ Ty $ substitute u $ getFunctionType g' s vs t) vs e')
   return (out, substitute u $ getFunctionType g' s vs t, s <> u)   
 
@@ -210,12 +210,45 @@ inferExp g (Case e [Alt "Inl" [x] e1, Alt "Inr" [y] e2]) = do
 inferExp g (Case e _) = typeError MalformedAlternatives
 
 -- Letrec
-inferExp g (Letrec bs e) = error "Letrec binding"
+inferExp g (Letrec bs e) = do
+  (bs', g', s)    <- bindNameRec g bs 
+  -- error $ "\n" 
+  --   <> "bs': " <> (show bs') <> "\n"
+  --   <> "g':  " <> (show g')  <> "\n" 
+  --   <> "s:   " <> (show s) <> "\n"
+  (e', t', s')    <- inferExp g' e
+  return (allTypes (substQType (s' <> s)) (Letrec bs' e'), t', s <> s')
 
-inferExp g _ = error "inferExp: Implement me!"
+-- Everything should be implemented now, so (compiler says) this is redundant
+-- inferExp g _ = error "inferExp: Implement me!"
 
--- bindNameRec :: Gamma -> Exp 
+-- Add all names in binding to gamma 
+bindNamesToGamma :: Gamma -> [Bind] -> TC (Gamma, [Bind])
+bindNamesToGamma g bs = bindNamesToGamma' g bs []
+bindNamesToGamma' :: Gamma -> [Bind] -> [Bind] -> TC (Gamma, [Bind]) 
+bindNamesToGamma' g [] bs = return $ (g, bs)
+bindNamesToGamma' g ((Bind x Nothing [] e):xs) bs = do
+  alpha     <- fresh
+  let g' = g `E.add` (x, Ty alpha)
+  bindNamesToGamma' g' xs (bs ++ [Bind x (Just (Ty alpha)) [] e])
+bindNamesToGamma' g ((Bind x (Just t) [] e):xs) bs = 
+  bindNamesToGamma' (g `E.add` (x, t)) xs (bs ++ [Bind x (Just t) [] e])
 
+-- Bind names for the Letrec
+bindNameRec :: Gamma -> [Bind] -> TC ([Bind], Gamma, Subst)
+bindNameRec g bs = do 
+  (g', bs')    <- bindNamesToGamma g bs
+  bindNameRec' g' bs' [] emptySubst
+
+bindNameRec' :: Gamma -> [Bind] -> [Bind] -> Subst -> TC ([Bind], Gamma, Subst)
+bindNameRec' g [] bs s = return $ (reverse bs, g, s)
+bindNameRec' g ((Bind x (Just (Ty t0)) [] e):xs) bs ss = do
+  (e', t, s)    <- inferExp g e
+  u             <- unify t t0
+  let g' = substGamma s $ g `E.add` (x, generalise (substGamma s g) t)
+  (bindNameRec' g' xs ((Bind x (Just (generalise g' (substitute u t))) [] e'):bs) (u <> s <> ss))
+
+-- Bind names in let
 bindName :: Gamma -> [Bind] -> TC ([Bind], Gamma, Subst)
 bindName g bs = bindName' g bs [] emptySubst
 
@@ -224,8 +257,9 @@ bindName' g [] bs s = return $ (reverse bs, g, s)
 bindName' g ((Bind x _ [] e):xs) bs ss = do
   (e', t, s) <- inferExp g e 
   let g' =  substGamma s $ g `E.add` (x, generalise (substGamma s g) t)
-  (bindName' g' xs ((Bind x (Just (generalise g' t)) [] e'):bs) (s <> s))
+  (bindName' g' xs ((Bind x (Just (generalise g' t)) [] e'):bs) (s <> ss))
 
+-- Bind variables in Letfun
 bindFunction :: Gamma -> [Id] -> TC Gamma
 bindFunction g [] = return $ g 
 bindFunction g (x:xs) = do 
