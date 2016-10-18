@@ -120,10 +120,6 @@ unify t1 t2 = typeError $ TypeMismatch t1 t2
 generalise :: Gamma -> Type -> QType
 generalise g t = foldl (\t' -> \x -> Forall x t') (Ty t) $ reverse $ filter (\x -> not $ elem x (tvGamma g)) (tv t)
 
--- replaceTypes :: Exp -> [Id] -> Subst -> Exp 
--- replaceTypes e [] s = e
--- replaceTypes e (x:xs) s = allTypes (substQType s) e
-
 -- Infer program
 inferProgram :: Gamma -> Program -> TC (Program, Type, Subst)
 inferProgram env [Bind name _ [] exp] = do 
@@ -191,12 +187,15 @@ inferExp g (Letfun (Bind f tau vs e)) = do
   let g' = (gb `E.add` (f, Ty alpha))
   (e', t, s)      <- inferExp g' e 
   u               <- unify (substitute s alpha) (getFunctionType g' s vs t)
+  -- error $ 
+  --   "\nt: " <> (show (substitute u $ getFunctionType g' s vs t)) <> 
+  --   "\ns: " <> (show s)
   case tau of 
     Nothing       -> do 
       let out = allTypes (substQType (s <> u)) $ Letfun (Bind f (Just $ Ty $ substitute u $ getFunctionType g' s vs t) vs e')
       return (out, substitute u $ getFunctionType g' s vs t, s <> u)   
     Just (Ty t')  -> do 
-      u'              <- unify t' (substitute u $ getFunctionType g' s vs t)
+      u'          <- unify t' (substitute u $ getFunctionType g' s vs t)
       let out = allTypes (substQType (s <> u)) $ Letfun (Bind f (Just $ Ty $ substitute u $ getFunctionType g' s vs t) vs e')
       return (out, substitute u $ getFunctionType g' s vs t, s <> u)   
 
@@ -205,10 +204,10 @@ inferExp g (Case e [Alt "Inl" [x] e1, Alt "Inr" [y] e2]) = do
   (e', t, s)      <- inferExp g e
   alphaL          <- fresh
   let gl = g `E.add` (x, Ty alphaL)
-  (e1', tl, s1)   <- inferExp gl e1
+  (e1', tl, s1)   <- inferExp (substGamma s gl) e1
   alphaR          <- fresh
   let gr = g `E.add` (y, Ty alphaR)
-  (e2', tr, s2)   <- inferExp (substGamma s1 gr) e2
+  (e2', tr, s2)   <- inferExp (substGamma (s1 <> s) gr) e2
   u               <- unify (substitute (s2 <> s1 <> s) (Sum alphaL alphaR)) (substitute (s2 <> s1) t)
   u'              <- unify (substitute (u <> s2) tl) (substitute u tr)
   return (Case e' [Alt "Inl" [x] e1', Alt "Inr" [y] e2'], substitute (u' <> u) tr, u' <> u <> s2 <> s1 <> s)
