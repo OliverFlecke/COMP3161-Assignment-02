@@ -180,19 +180,25 @@ inferExp g (If e e1 e2) = do
 
 -- Let binding
 inferExp g (Let bs e) = do
-  (bs', g', s)    <- bindName g bs  
+  (bs', g', s)   <- bindName g bs  
   (e', t', s')   <- inferExp g' e 
   return (allTypes (substQType (s' <> s)) (Let bs' e'), t', s <> s')
 
 -- Let function expression
-inferExp g (Letfun (Bind f _ vs e)) = do
+inferExp g (Letfun (Bind f tau vs e)) = do
   gb              <- bindFunction g vs
   alpha           <- fresh
   let g' = (gb `E.add` (f, Ty alpha))
   (e', t, s)      <- inferExp g' e 
   u               <- unify (substitute s alpha) (getFunctionType g' s vs t)
-  let out = allTypes (substQType (s <> u)) $ Letfun (Bind f (Just $ Ty $ substitute u $ getFunctionType g' s vs t) vs e')
-  return (out, substitute u $ getFunctionType g' s vs t, s <> u)   
+  case tau of 
+    Nothing       -> do 
+      let out = allTypes (substQType (s <> u)) $ Letfun (Bind f (Just $ Ty $ substitute u $ getFunctionType g' s vs t) vs e')
+      return (out, substitute u $ getFunctionType g' s vs t, s <> u)   
+    Just (Ty t')  -> do 
+      u'              <- unify t' (substitute u $ getFunctionType g' s vs t)
+      let out = allTypes (substQType (s <> u)) $ Letfun (Bind f (Just $ Ty $ substitute u $ getFunctionType g' s vs t) vs e')
+      return (out, substitute u $ getFunctionType g' s vs t, s <> u)   
 
 -- Note: this is the only case you need to handle for case expressions
 inferExp g (Case e [Alt "Inl" [x] e1, Alt "Inr" [y] e2]) = do
@@ -212,10 +218,6 @@ inferExp g (Case e _) = typeError MalformedAlternatives
 -- Letrec
 inferExp g (Letrec bs e) = do
   (bs', g', s)    <- bindNameRec g bs 
-  -- error $ "\n" 
-  --   <> "bs': " <> (show bs') <> "\n"
-  --   <> "g':  " <> (show g')  <> "\n" 
-  --   <> "s:   " <> (show s) <> "\n"
   (e', t', s')    <- inferExp g' e
   return (allTypes (substQType (s' <> s)) (Letrec bs' e'), t', s <> s')
 
@@ -234,7 +236,7 @@ bindNamesToGamma' g ((Bind x Nothing [] e):xs) bs = do
 bindNamesToGamma' g ((Bind x (Just t) [] e):xs) bs = 
   bindNamesToGamma' (g `E.add` (x, t)) xs (bs ++ [Bind x (Just t) [] e])
 
--- Bind names for the Letrec
+-- Bind names for the Letrec -- Note that this has to be different from the let expression
 bindNameRec :: Gamma -> [Bind] -> TC ([Bind], Gamma, Subst)
 bindNameRec g bs = do 
   (g', bs')    <- bindNamesToGamma g bs
@@ -254,10 +256,16 @@ bindName g bs = bindName' g bs [] emptySubst
 
 bindName' :: Gamma -> [Bind] -> [Bind] -> Subst -> TC ([Bind], Gamma, Subst)
 bindName' g [] bs s = return $ (reverse bs, g, s)
-bindName' g ((Bind x _ [] e):xs) bs ss = do
-  (e', t, s) <- inferExp g e 
-  let g' =  substGamma s $ g `E.add` (x, generalise (substGamma s g) t)
-  (bindName' g' xs ((Bind x (Just (generalise g' t)) [] e'):bs) (s <> ss))
+bindName' g ((Bind x t0 [] e):xs) bs ss = do
+  (e', t, s)  <- inferExp g e 
+  case t0 of 
+    Nothing       -> do 
+      let g' =  substGamma s $ g `E.add` (x, generalise (substGamma s g) t)
+      (bindName' g' xs ((Bind x (Just (generalise g' t)) [] e'):bs) (s <> ss))
+    Just (Ty t')  -> do 
+      u           <- unify t' t
+      let g' =  substGamma s $ g `E.add` (x, generalise (substGamma s g) t)
+      (bindName' g' xs ((Bind x (Just (generalise g' t)) [] e'):bs) (s <> ss))
 
 -- Bind variables in Letfun
 bindFunction :: Gamma -> [Id] -> TC Gamma

@@ -1,0 +1,5 @@
+main
+     =
+    let f
+          = letfun f :: a -> Int x = x + x ;
+    in f 1;

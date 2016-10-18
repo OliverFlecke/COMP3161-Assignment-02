@@ -1,4 +1,4 @@
 main = letrec a :: Bool = b < c;
              b = 8;
-             c = 7;
+             c :: Int = 7;
         in c;

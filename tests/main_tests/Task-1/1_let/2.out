@@ -1,0 +1,4 @@
+main :: Int = let x :: Int = 1;
+              in let y :: Int = x;
+                     x :: Bool = True;
+                 in y;

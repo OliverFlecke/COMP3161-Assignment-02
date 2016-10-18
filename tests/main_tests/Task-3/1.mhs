@@ -1,0 +1,5 @@
+main
+     = let x :: Bool = True;
+           y :: Int = 1;
+           z = ();
+       in x;
